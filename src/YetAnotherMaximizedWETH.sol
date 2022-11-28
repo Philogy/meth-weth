@@ -79,47 +79,12 @@ contract YAM_WETH {
     }
 
     function transfer(address _to, uint256 _amount) external payable succeeds returns (bool) {
-        assembly {
-            if iszero(_to) {
-                // `revert ZeroAddress()`
-                mstore(0x00, 0xd92e233d)
-                revert(0x1c, 0x04)
-            }
-            let fromData := sload(caller())
-            if gt(_amount, and(fromData, BALANCE_MASK)) {
-                // `revert InsufficientBalance()`
-                mstore(0x00, 0xf4d678b8)
-                revert(0x1c, 0x04)
-            }
-            sstore(caller(), sub(fromData, _amount))
-            sstore(_to, add(sload(_to), _amount))
-            mstore(0x00, _amount)
-            log3(0x00, 0x20, TRANSFER_EVENT_SIG, caller(), _to)
-        }
+        _transfer(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
     function transferFrom(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
-        assembly {
-            if iszero(_to) {
-                // `revert ZeroAddress()`
-                mstore(0x00, 0xd92e233d)
-                revert(0x1c, 0x04)
-            }
-        }
         bytes32 fromData = _useAllowance(_from, _amount);
-        assembly {
-            if gt(_amount, and(fromData, BALANCE_MASK)) {
-                // `revert InsufficientBalance()`
-                mstore(0x00, 0xf4d678b8)
-                revert(0x1c, 0x04)
-            }
-
-            sstore(_from, sub(fromData, _amount))
-            sstore(_to, add(sload(_to), _amount))
-
-            mstore(0x00, _amount)
-            log3(0x00, 0x20, TRANSFER_EVENT_SIG, _from, _to)
-        }
+        _transfer(fromData, _from, _to, _amount);
     }
 
     function depositAll() public payable succeeds returns (bool) {
@@ -327,16 +292,31 @@ contract YAM_WETH {
     }
 
     function _withdrawTo(address _to, uint256 _amount) internal {
-        bytes32 fromData;
-        assembly {
-            fromData := sload(caller())
-        }
-        _withdrawDirectFromTo(fromData, msg.sender, _to, _amount);
+        _withdrawDirectFromTo(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
     function _withdrawFromTo(address _from, address _to, uint256 _amount) internal {
         bytes32 fromData = _useAllowance(_from, _amount);
         _withdrawDirectFromTo(fromData, _from, _to, _amount);
+    }
+
+    function _transfer(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
+        assembly {
+            if iszero(_to) {
+                // `revert ZeroAddress()`
+                mstore(0x00, 0xd92e233d)
+                revert(0x1c, 0x04)
+            }
+            if gt(_amount, and(_fromData, BALANCE_MASK)) {
+                // `revert InsufficientBalance()`
+                mstore(0x00, 0xf4d678b8)
+                revert(0x1c, 0x04)
+            }
+            sstore(_from, sub(_fromData, _amount))
+            sstore(_to, add(sload(_to), _amount))
+            mstore(0x00, _amount)
+            log3(0x00, 0x20, TRANSFER_EVENT_SIG, _from, _to)
+        }
     }
 
     function _useAllowance(address _from, uint256 _amount) internal returns (bytes32 fromData) {
@@ -359,6 +339,12 @@ contract YAM_WETH {
                     sstore(allowanceSlot, sub(senderAllowance, _amount))
                 }
             }
+        }
+    }
+
+    function _getData(address _account) internal view returns (bytes32 data) {
+        assembly {
+            data := sload(_account)
         }
     }
 
