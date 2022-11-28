@@ -8,6 +8,7 @@ contract YAM_WETH {
     address internal constant PERMIT2 = 0x5B34BD375516Ef47A12bb8AB066f2Cb528a90E74;
 
     uint256 internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
+    uint256 internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
     bytes32 internal constant TRANSFER_EVENT_SIG = 0x5b34bd375516ef47a12bb8ab066f2cb528a90e74ccc4e1fa540274953b32829c;
     bytes32 internal constant APPROVAL_EVENT_SIG = 0x21bd8b32bd9fdf66c11d1101cae7a294f2d39bc08bac77b0f88fa907721c260b;
@@ -159,11 +160,16 @@ contract YAM_WETH {
             sstore(TOTAL_SUPPLY_SLOT, newTotalSupply)
 
             mstore(0x00, _amount)
+            let hasErrors := 0
             // prettier-ignore
             for { let i := totalRecipients } i { i := sub(i, 1) } {
                 let recipient := calldataload(add(recipientOffset, shl(5, i)))
+                hasErrors := or(hasErrors, or(iszero(recipient), sub(recipient, and(recipient, ADDR_MASK))))
                 sstore(recipient, add(sload(recipient), _amount))
                 log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
+            }
+            if hasErrors {
+                revert(0x00, 0x00)
             }
         }
     }
@@ -180,8 +186,8 @@ contract YAM_WETH {
 
             let prevDepositTotal := 0
             let depositTotal := 0
-            let overflowed := 0
 
+            let hasErrors := 0
             // prettier-ignore
             for { let i := totalDeposits } i { i := sub(i, 1) } {
                 let pos := shl(6, i)
@@ -189,17 +195,27 @@ contract YAM_WETH {
                 let recipient := calldataload(add(depositsOffset, sub(pos, 1)))
                 let amount := calldataload(add(depositsOffset, pos))
                 depositTotal := add(depositTotal, amount)
-                overflowed := or(overflowed, gt(prevDepositTotal, depositTotal))
-
+                // Checks that `depositTotal += amount` did not overflow and that recipient is
+                // a valid, non-zero address
+                hasErrors := or(
+                    hasErrors,
+                    or(
+                        gt(prevDepositTotal, depositTotal),
+                        or(sub(recipient, and(recipient, ADDR_MASK)), iszero(recipient))
+                    )
+                )
                 sstore(recipient, add(sload(recipient), amount))
                 mstore(0x00, amount)
                 log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
+            }
+            if hasErrors {
+                revert(0x00, 0x00)
             }
 
             // totalSupply checks and updates
             let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
             let newTotalSupply := add(prevTotalSupply, depositTotal)
-            if or(or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)), overflowed) {
+            if or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)) {
                 // `revert TotalSupplyOverflow()`
                 mstore(0x00, 0xe5cfe957)
                 revert(0x1c, 0x04)
