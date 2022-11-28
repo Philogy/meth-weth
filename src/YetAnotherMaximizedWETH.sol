@@ -4,6 +4,10 @@ pragma solidity 0.8.15;
 contract YAM_WETH {
     uint256 internal constant TOTAL_SUPPLY_SLOT = 0;
 
+    /// @notice The reentrancy mutex slot
+    /// @dev Will be removed in favor of transient storage post EIP-1153
+    uint256 internal constant MUTEX_SLOT = 1;
+
     // TODO: Set real address
     address internal constant PERMIT2 = 0x5B34BD375516Ef47A12bb8AB066f2Cb528a90E74;
 
@@ -23,10 +27,6 @@ contract YAM_WETH {
     bytes32 internal constant PRIMARY_OPERATOR_EVENT_SIG =
         0x887b30d73fc01ab8c24c20c0b64cdd39b55b1e2b705237e4e4945e634e31ba74;
 
-    /// @notice The reentrancy mutex slot
-    /// @dev Will be removed in favor of transient storage post EIP-1153
-    uint256 private MUTEX;
-
     error InsufficientBalance();
     error InsufficientFreeBalance();
     error InsufficientPermission();
@@ -41,6 +41,25 @@ contract YAM_WETH {
         assembly {
             mstore(0x00, 1)
             return(0x00, 0x20)
+        }
+    }
+
+    modifier nonReentrant() {
+        assembly {
+            // Do not allow reentrancy
+            if eq(sload(MUTEX_SLOT), 0x01) {
+                // "NoReentrancy()" error signature
+                mstore(returndatasize(), 0x583fe886)
+                revert(0x1c, 0x04)
+            }
+
+            // Lock the mutex
+            sstore(MUTEX_SLOT, 0x01)
+        }
+        _;
+        assembly {
+            // Unlock the mutex
+            sstore(MUTEX_SLOT, 0x00)
         }
     }
 
@@ -410,22 +429,18 @@ contract YAM_WETH {
     /// @param  from   - The receiver of the flash loan. Must be a contract with a
     ///                 `flashWeth(uint256)` function.
     /// @param  amount - The amount of WETH in WEI to be loaned to `msg.sender`.
-    function flashLoan(address from, uint256 amount) external {
+    ///
+    /// SAFETY: This currently breaks the "the token balance of an account cannot
+    ///         decrease without their implicit / explicit permission or action" invariant
+    /// SAFETY: Should probably add an upper cap to the loanable amount. Maybe 1-2% of
+    ///         the total supply of wrapped ETH?
+    function flashLoan(address from, uint256 amount) external nonReentrant {
         assembly {
-            // Do not allow nested flash loans
-            if eq(sload(MUTEX.slot), 0x01) {
-                // "NoReentrancy()" error signature
-                mstore(returndatasize(), 0x583fe886)
-                revert(0x1c, 0x04)
-            }
-
-            // Lock the mutex
-            sstore(MUTEX.slot, 0x01)
-
             // Get the initial WETH balance of the `from` address
             let fromInitialBalance := sload(from)
 
             // Do not allow loaning more tokens than `from`'s balance
+            // TODO: Upper loan limit check
             if gt(amount, fromInitialBalance) {
                 // "LoanExceedsBalance()" error signature
                 mstore(returndatasize(), 0x912b4508)
@@ -456,11 +471,6 @@ contract YAM_WETH {
                 mstore(0x00, 0xe90cbfe8)
                 revert(0x1c, 0x04)
             }
-
-            // Clear mutex slot
-            sstore(MUTEX.slot, 0x00)
-
-            stop()
         }
     }
 }

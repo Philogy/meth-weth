@@ -170,4 +170,31 @@ contract YAM_WETH_Test is Test {
         vm.expectRevert(YAM_WETH.OutstandingDebt.selector);
         borrower.startLoan(1 ether);
     }
+
+    /// @notice Ensures that if a function protected by the `nonReentrant` modifier
+    /// reverts, the mutex slot is cleared.
+    /// @dev This test will be removed after the migration to transient storage.
+    function test_nonReentrant_unlocksOnRevert_success() public {
+        // Deploy a reentrant borrower
+        ReentrantBorrower rBorrower = new ReentrantBorrower(weth, address(this));
+
+        // Get 10 WETH
+        vm.deal(address(this), 10 ether);
+        weth.deposit{value: 10 ether}();
+
+        // Perform a reentrant flashLoan call- will revert.
+        vm.expectRevert(YAM_WETH.NoReentrancy.selector);
+        rBorrower.startLoan(1 ether);
+
+        // Deploy an honest borrower
+        HonestBorrower hBorrower = new HonestBorrower(weth, address(this));
+
+        // Start a loan and repay it in full
+        // If the mutex was unlocked, this should succeed.
+        hBorrower.startLoan(1 ether);
+
+        // Ensure that all funds were repaid
+        assertEq(weth.balanceOf(address(this)), 10 ether);
+        assertEq(weth.balanceOf(address(hBorrower)), 0);
+    }
 }
