@@ -10,11 +10,15 @@ contract YAM_WETH {
     uint256 internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
     uint256 internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
-    bytes32 internal constant TRANSFER_EVENT_SIG = 0x5b34bd375516ef47a12bb8ab066f2cb528a90e74ccc4e1fa540274953b32829c;
-    bytes32 internal constant APPROVAL_EVENT_SIG = 0x21bd8b32bd9fdf66c11d1101cae7a294f2d39bc08bac77b0f88fa907721c260b;
-    // event `PrimaryOperatorSet(address indexed operator)`
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+    bytes32 internal constant TRANSFER_EVENT_SIG = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
+
+    event Approval(address indexed owner, address indexed spender, uint256 amount);
+    bytes32 internal constant APPROVAL_EVENT_SIG = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
+
+    event PrimaryOperatorSet(address indexed operator);
     bytes32 internal constant PRIMARY_OPERATOR_EVENT_SIG =
-        0xa4fc55e949965ca58de1b448de3f5c17e96f249e4793ee91ccc6dc901b1763ac;
+        0xcbf7ee425ab1afe051156a21fb6c924e04c1d0a721df0710d5d572daeccb1d9d;
 
     error InsufficientBalance();
     error InsufficientFreeBalance();
