@@ -93,11 +93,7 @@ contract YAM_WETH {
         }
     }
 
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _amount
-    ) external payable succeeds returns (bool) {
+    function transferFrom(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
         assembly {
             if iszero(_to) {
                 // `revert ZeroAddress()`
@@ -229,11 +225,7 @@ contract YAM_WETH {
         _withdrawFromTo(_from, msg.sender, _amount);
     }
 
-    function withdrawFromTo(
-        address _from,
-        address _to,
-        uint256 _amount
-    ) external payable succeeds returns (bool) {
+    function withdrawFromTo(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
         _withdrawFromTo(_from, _to, _amount);
     }
 
@@ -322,11 +314,7 @@ contract YAM_WETH {
         _withdrawDirectFromTo(fromData, msg.sender, _to, _amount);
     }
 
-    function _withdrawFromTo(
-        address _from,
-        address _to,
-        uint256 _amount
-    ) internal {
+    function _withdrawFromTo(address _from, address _to, uint256 _amount) internal {
         bytes32 fromData = _useAllowance(_from, _amount);
         _withdrawDirectFromTo(fromData, _from, _to, _amount);
     }
@@ -354,12 +342,7 @@ contract YAM_WETH {
         }
     }
 
-    function _withdrawDirectFromTo(
-        bytes32 _fromData,
-        address _from,
-        address _to,
-        uint256 _amount
-    ) internal {
+    function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
         assembly {
             if gt(_amount, and(_fromData, BALANCE_MASK)) {
                 // `revert InsufficientBalance()`
