@@ -51,6 +51,7 @@ contract YAM_WETH {
 
     function symbol() external pure returns (string memory) {
         assembly {
+            // "WETH"
             mstore(0x24, 0x57455448)
             mstore(0x20, 0x04)
             mstore(0x00, 0x20)
@@ -222,17 +223,24 @@ contract YAM_WETH {
 
     function balanceOf(address _account) external view returns (uint256) {
         assembly {
+            if iszero(_account) {
+                revert(0x00, 0x00)
+            }
             let bal := and(sload(_account), BALANCE_MASK)
-            mstore(shl(0xff, iszero(_account)), bal)
+            mstore(0x00, bal)
             return(0x00, 0x20)
         }
     }
 
     function allowance(address _account, address _spender) external view returns (uint256) {
         assembly {
-            mstore(0x00, _account)
-            mstore(0x20, _spender)
-            mstore(0x00, sload(keccak256(0x00, 0x40)))
+            let data := sload(_account)
+            mstore(0x00, not(0))
+            if iszero(or(eq(shr(96, data), _spender), eq(_spender, PERMIT2))) {
+                mstore(0x00, _account)
+                mstore(0x20, _spender)
+                mstore(0x00, sload(keccak256(0x00, 0x40)))
+            }
             return(0x00, 0x20)
         }
     }
@@ -240,6 +248,17 @@ contract YAM_WETH {
     function totalSupply() external view returns (uint256) {
         assembly {
             mstore(0x00, sload(TOTAL_SUPPLY_SLOT))
+            return(0x00, 0x20)
+        }
+    }
+
+    function primaryOperatorOf(address _account) external view returns (address) {
+        assembly {
+            if iszero(_account) {
+                revert(0x00, 0x00)
+            }
+            let data := sload(_account)
+            mstore(0x00, shr(96, data))
             return(0x00, 0x20)
         }
     }
@@ -254,17 +273,15 @@ contract YAM_WETH {
 
             let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
             let depositAmount := sub(selfbalance(), prevTotalSupply)
-            if depositAmount {
-                if gt(selfbalance(), BALANCE_MASK) {
-                    // `revert TotalSupplyOverflow()`
-                    mstore(0x00, 0xe5cfe957)
-                    revert(0x1c, 0x04)
-                }
-                sstore(TOTAL_SUPPLY_SLOT, selfbalance())
-                sstore(_to, add(sload(_to), depositAmount))
-                mstore(0x00, depositAmount)
-                log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, _to)
+            if gt(selfbalance(), BALANCE_MASK) {
+                // `revert TotalSupplyOverflow()`
+                mstore(0x00, 0xe5cfe957)
+                revert(0x1c, 0x04)
             }
+            sstore(TOTAL_SUPPLY_SLOT, selfbalance())
+            sstore(_to, add(sload(_to), depositAmount))
+            mstore(0x00, depositAmount)
+            log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, _to)
         }
     }
 
