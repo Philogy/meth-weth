@@ -16,9 +16,9 @@ contract YAM_WETH {
     event Approval(address indexed owner, address indexed spender, uint256 amount);
     bytes32 internal constant APPROVAL_EVENT_SIG = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
 
-    event PrimaryOperatorSet(address indexed operator);
+    event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
     bytes32 internal constant PRIMARY_OPERATOR_EVENT_SIG =
-        0xcbf7ee425ab1afe051156a21fb6c924e04c1d0a721df0710d5d572daeccb1d9d;
+        0x887b30d73fc01ab8c24c20c0b64cdd39b55b1e2b705237e4e4945e634e31ba74;
 
     error InsufficientBalance();
     error InsufficientFreeBalance();
@@ -75,10 +75,12 @@ contract YAM_WETH {
         }
     }
 
-    function setPrimaryOperator(address _primaryOperator) external payable succeeds returns (bool) {
+    function setPrimaryOperator(address _newOperator) external payable succeeds returns (bool) {
         assembly {
-            sstore(caller(), or(shl(96, _primaryOperator), and(sload(caller()), BALANCE_MASK)))
-            log2(0x00, 0x00, PRIMARY_OPERATOR_EVENT_SIG, _primaryOperator)
+            let callerData := sload(caller())
+            let prevOperator := shr(96, callerData)
+            sstore(caller(), or(shl(96, _newOperator), and(callerData, BALANCE_MASK)))
+            log4(0x00, 0x00, PRIMARY_OPERATOR_EVENT_SIG, caller(), prevOperator, _newOperator)
         }
     }
 
