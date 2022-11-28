@@ -30,6 +30,10 @@ contract YAM_WETH {
         }
     }
 
+    receive() external payable {
+        _depositAllTo(msg.sender);
+    }
+
     function name() external pure returns (string memory) {
         assembly {
             // "Yet Another Maximized Wrapped Ether Contract" (len: 44)
@@ -118,7 +122,7 @@ contract YAM_WETH {
         }
     }
 
-    function depositAll() external payable succeeds returns (bool) {
+    function depositAll() public payable succeeds returns (bool) {
         _depositAllTo(msg.sender);
     }
 
