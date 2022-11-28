@@ -35,7 +35,7 @@ contract YAM_WETH {
     }
 
     receive() external payable {
-        _depositAllTo(msg.sender);
+        deposit();
     }
 
     function name() external pure returns (string memory) {
@@ -93,19 +93,19 @@ contract YAM_WETH {
         _transfer(fromData, _from, _to, _amount);
     }
 
-    function depositAll() public payable succeeds returns (bool) {
+    function deposit() public payable succeeds returns (bool) {
         _depositAllTo(msg.sender);
     }
 
-    function depositAllTo(address _recipient) external payable succeeds returns (bool) {
+    function depositTo(address _recipient) external payable succeeds returns (bool) {
         _depositAllTo(_recipient);
     }
 
-    function deposit(uint256 _amount) external payable succeeds returns (bool) {
+    function depositAmount(uint256 _amount) external payable succeeds returns (bool) {
         _depositAmountTo(msg.sender, _amount);
     }
 
-    function depositTo(address _recipient, uint256 _amount) external payable succeeds returns (bool) {
+    function depositAmountTo(address _recipient, uint256 _amount) external payable succeeds returns (bool) {
         _depositAmountTo(_recipient, _amount);
     }
 
