@@ -9,12 +9,14 @@ contract YAM_WETH_Test is Test {
 
     address mainUser = vm.addr(1);
 
+    address permit2 = vm.addr(0x929829);
+
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Approval(address indexed owner, address indexed spender, uint256 amount);
     event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
 
     function setUp() public {
-        weth = new YAM_WETH();
+        weth = new YAM_WETH(permit2);
     }
 
     function testName() public {
