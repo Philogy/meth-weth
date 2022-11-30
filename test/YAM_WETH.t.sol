@@ -11,8 +11,8 @@ contract YAM_WETH_Test is Test {
 
     address permit2 = vm.addr(0x929829);
 
-    event Transfer(address indexed from, address indexed to, uint256 amount);
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
+    event Transfer(address indexed from, address indexed to, uint amount);
+    event Approval(address indexed owner, address indexed spender, uint amount);
     event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
 
     function setUp() public {
@@ -74,7 +74,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_to != address(0));
         vm.assume(_from != _to);
         vm.assume(_transferAmount <= _fromStartBal);
-        vm.assume(uint256(_fromStartBal) + uint256(_toStartBal) <= uint256(type(uint96).max));
+        vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= uint(type(uint96).max));
         setupBalance(_from, _fromStartBal);
         setupBalance(_to, _toStartBal);
         setupOperator(_from, _fromOperator);

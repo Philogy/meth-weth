@@ -3,11 +3,12 @@ pragma solidity 0.8.15;
 
 contract YAM_WETH {
     uint256 internal constant TOTAL_SUPPLY_SLOT = 0;
+    uint internal constant TOTAL_SUPPLY_SLOT = 0;
 
     address public immutable PERMIT2;
 
-    uint256 internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
-    uint256 internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
+    uint internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
+    uint internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
     event Transfer(address indexed from, address indexed to, uint256 amount);
     bytes32 internal constant TRANSFER_EVENT_SIG = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
@@ -26,7 +27,7 @@ contract YAM_WETH {
     // keccak256("1")
     bytes32 internal constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6;
     bytes32 internal immutable CACHED_DOMAIN_SEPARATOR;
-    uint256 internal immutable CACHED_CHAINID;
+    uint internal immutable CACHED_CHAINID;
 
     // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
     bytes32 internal constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
@@ -89,7 +90,7 @@ contract YAM_WETH {
         }
     }
 
-    function approve(address _spender, uint256 _allowance) external payable succeeds returns (bool) {
+    function approve(address _spender, uint _allowance) external payable succeeds returns (bool) {
         assembly {
             mstore(0x00, caller())
             mstore(0x20, _spender)
@@ -108,11 +109,11 @@ contract YAM_WETH {
         }
     }
 
-    function transfer(address _to, uint256 _amount) external payable succeeds returns (bool) {
+    function transfer(address _to, uint _amount) external payable succeeds returns (bool) {
         _transfer(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
-    function transferFrom(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
+    function transferFrom(address _from, address _to, uint _amount) external payable succeeds returns (bool) {
         bytes32 fromData = _useAllowance(_from, _amount);
         _transfer(fromData, _from, _to, _amount);
     }
@@ -125,15 +126,15 @@ contract YAM_WETH {
         _depositAllTo(_recipient);
     }
 
-    function depositAmount(uint256 _amount) external payable succeeds returns (bool) {
+    function depositAmount(uint _amount) external payable succeeds returns (bool) {
         _depositAmountTo(msg.sender, _amount);
     }
 
-    function depositAmountTo(address _recipient, uint256 _amount) external payable succeeds returns (bool) {
+    function depositAmountTo(address _recipient, uint _amount) external payable succeeds returns (bool) {
         _depositAmountTo(_recipient, _amount);
     }
 
-    function depositToMany(address[] calldata _recipients, uint256 _amount) external payable succeeds returns (bool) {
+    function depositToMany(address[] calldata _recipients, uint _amount) external payable succeeds returns (bool) {
         assembly {
             let recipientOffset := add(_recipients.offset, 0x04)
             let totalRecipients := calldataload(recipientOffset)
@@ -175,7 +176,7 @@ contract YAM_WETH {
 
     struct Deposit {
         address recipient;
-        uint256 amount;
+        uint amount;
     }
 
     function depositAmountsToMany(Deposit[] calldata _deposits) external payable succeeds returns (bool) {
@@ -228,27 +229,27 @@ contract YAM_WETH {
         }
     }
 
-    function withdraw(uint256 _amount) external payable succeeds returns (bool) {
+    function withdraw(uint _amount) external payable succeeds returns (bool) {
         _withdrawTo(msg.sender, _amount);
     }
 
-    function withdrawTo(address _to, uint256 _amount) external payable succeeds returns (bool) {
+    function withdrawTo(address _to, uint _amount) external payable succeeds returns (bool) {
         _withdrawTo(_to, _amount);
     }
 
-    function withdrawFrom(address _from, uint256 _amount) external payable succeeds returns (bool) {
+    function withdrawFrom(address _from, uint _amount) external payable succeeds returns (bool) {
         _withdrawFromTo(_from, msg.sender, _amount);
     }
 
-    function withdrawFromTo(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
+    function withdrawFromTo(address _from, address _to, uint _amount) external payable succeeds returns (bool) {
         _withdrawFromTo(_from, _to, _amount);
     }
 
     function permit(
         address _owner,
         address _spender,
-        uint256 _allowance,
-        uint256 _deadline,
+        uint _allowance,
+        uint _deadline,
         uint8 _v,
         bytes32 _r,
         bytes32 _s
@@ -303,7 +304,7 @@ contract YAM_WETH {
         }
     }
 
-    function balanceOf(address _account) external view returns (uint256) {
+    function balanceOf(address _account) external view returns (uint) {
         assembly {
             if iszero(_account) {
                 revert(0x00, 0x00)
@@ -314,7 +315,7 @@ contract YAM_WETH {
         }
     }
 
-    function allowance(address _account, address _spender) external view returns (uint256) {
+    function allowance(address _account, address _spender) external view returns (uint) {
         assembly {
             mstore(0x00, _account)
             mstore(0x20, _spender)
@@ -323,7 +324,7 @@ contract YAM_WETH {
         }
     }
 
-    function totalSupply() external view returns (uint256) {
+    function totalSupply() external view returns (uint) {
         assembly {
             mstore(0x00, sload(TOTAL_SUPPLY_SLOT))
             return(0x00, 0x20)
@@ -367,7 +368,7 @@ contract YAM_WETH {
         }
     }
 
-    function _depositAmountTo(address _to, uint256 _amount) internal {
+    function _depositAmountTo(address _to, uint _amount) internal {
         assembly {
             if iszero(_to) {
                 // `revert ZeroAddress()`
@@ -396,16 +397,16 @@ contract YAM_WETH {
         }
     }
 
-    function _withdrawTo(address _to, uint256 _amount) internal {
+    function _withdrawTo(address _to, uint _amount) internal {
         _withdrawDirectFromTo(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
-    function _withdrawFromTo(address _from, address _to, uint256 _amount) internal {
+    function _withdrawFromTo(address _from, address _to, uint _amount) internal {
         bytes32 fromData = _useAllowance(_from, _amount);
         _withdrawDirectFromTo(fromData, _from, _to, _amount);
     }
 
-    function _transfer(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
+    function _transfer(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
             if iszero(_to) {
                 // `revert ZeroAddress()`
@@ -424,7 +425,7 @@ contract YAM_WETH {
         }
     }
 
-    function _useAllowance(address _from, uint256 _amount) internal returns (bytes32 fromData) {
+    function _useAllowance(address _from, uint _amount) internal returns (bytes32 fromData) {
         address permit2 = PERMIT2;
         assembly {
             fromData := sload(_from)
@@ -454,7 +455,7 @@ contract YAM_WETH {
         }
     }
 
-    function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
+    function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
             if gt(_amount, and(_fromData, BALANCE_MASK)) {
                 // `revert InsufficientBalance()`
