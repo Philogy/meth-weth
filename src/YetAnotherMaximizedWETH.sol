@@ -450,6 +450,11 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 let allowanceSlot := keccak256(0x00, 0x40)
                 let senderAllowance := sload(allowanceSlot)
                 if iszero(eq(senderAllowance, not(0))) {
+                    if iszero(_from) {
+                        // `revert ZeroAddress()`
+                        mstore(0x00, 0xd92e233d)
+                        revert(0x1c, 0x04)
+                    }
                     // No infinite approval
                     if gt(_amount, senderAllowance) {
                         // `revert InsufficientPermission()`
