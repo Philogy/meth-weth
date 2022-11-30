@@ -69,3 +69,7 @@ Total Supply | `slot = 0` | (95-0: `totalSupply`)
 Main Account Data of `account` | `slot = account` | (255-96: `primaryOperator`, 95-0: `balance`)
 Allowance `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))` | (255-0: `allowance`)
 ERC-2612 Permit Nonce of `account` | `slot = account << 96` | (255-0: `nonce`)
+
+## Invariants
+- `msg.sender` (`caller()`) cannot be zero-address
+- Permit2 will not call `transferFrom` with `from` being the zero-address
