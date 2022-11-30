@@ -190,6 +190,37 @@ contract YAM_WETH_Test is Test {
         }
     }
 
+    function testCannotTransferToZero(address _from, uint96 _amount) public not0(_from) {
+        setupBalance(_from, _amount);
+        vm.prank(_from);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.transfer(address(0), _amount);
+    }
+
+    function testCannotTransferFromToZero(
+        address _operator,
+        address _from,
+        uint96 _amount
+    ) public not0(_operator) not0(_from) notEq(_operator, permit2) {
+        setupBalance(_from, _amount);
+        setupOperator(_from, _operator);
+
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.transferFrom(_from, address(0), _amount);
+    }
+
+    function testCannotTransferFromZero(
+        address _operator,
+        address _to,
+        uint96 _amount
+    ) public not0(_operator) not0(_to) notEq(_operator, permit2) {
+        // ensure supply
+        setupBalance(vm.addr(1), 100e18);
+
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.transferFrom(address(0), _to, _amount);
     }
 
     function testTransferFromAsOperator(
