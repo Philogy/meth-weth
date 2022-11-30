@@ -66,9 +66,7 @@ contract YAM_WETH_Test is Test {
         vm.expectEmit(true, true, true, true);
         emit Transfer(address(0), _account, _amount);
         (bool success, bytes memory returnData) = address(weth).call{value: _amount}("");
-        assertTrue(success);
-        bool depositSuccess = abi.decode(returnData, (bool));
-        assertTrue(depositSuccess);
+        assertSucceeded(success, returnData);
         assertEq(weth.balanceOf(_account), _amount);
     }
 
@@ -176,7 +174,7 @@ contract YAM_WETH_Test is Test {
         uint96 _fromStartBal,
         uint96 _toStartBal,
         uint96 _transferAmount
-    ) public not0(_from) not0(_to) notEq(_from, _to) {
+    ) public not0(_from) not0(_to) {
         vm.assume(_transferAmount <= _fromStartBal);
         vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= uint(type(uint96).max));
         setupBalance(_from, _fromStartBal);
@@ -186,8 +184,12 @@ contract YAM_WETH_Test is Test {
         vm.expectEmit(true, true, true, true);
         emit Transfer(_from, _to, _transferAmount);
         assertTrue(weth.transfer(_to, _transferAmount));
-        assertEq(weth.balanceOf(_from), _fromStartBal - _transferAmount, "from bal mismatch");
-        assertEq(weth.balanceOf(_to), _toStartBal + _transferAmount, "to bal mismatch");
+        if (_from != _to) {
+            assertEq(weth.balanceOf(_from), _fromStartBal - _transferAmount, "from bal mismatch");
+            assertEq(weth.balanceOf(_to), _toStartBal + _transferAmount, "to bal mismatch");
+        }
+    }
+
     }
 
     function testTransferFromAsOperator(
@@ -195,7 +197,7 @@ contract YAM_WETH_Test is Test {
         address _from,
         address _to,
         uint96 _transferAmount
-    ) public not0(_operator) not0(_from) not0(_to) notEq(_from, _to) {
+    ) public not0(_operator) not0(_from) not0(_to) notEq(_operator, permit2) {
         setupOperator(_from, _operator);
         setupBalance(_from, _transferAmount);
 
@@ -203,7 +205,7 @@ contract YAM_WETH_Test is Test {
         vm.expectEmit(true, true, true, true);
         emit Transfer(_from, _to, _transferAmount);
         assertTrue(weth.transferFrom(_from, _to, _transferAmount));
-        assertEq(weth.balanceOf(_from), 0, "from bal mismatch");
+        if (_from != _to) assertEq(weth.balanceOf(_from), 0, "from bal mismatch");
         assertEq(weth.balanceOf(_to), _transferAmount, "to bal mismatch");
         assertEq(weth.primaryOperatorOf(_from), _operator);
     }
@@ -257,5 +259,11 @@ contract YAM_WETH_Test is Test {
     function setupOperator(address _account, address _operator) internal {
         vm.prank(_account);
         weth.setPrimaryOperator(_operator);
+    }
+
+    function assertSucceeded(bool _success, bytes memory _returndata) internal {
+        assertTrue(_success);
+        bool returnedFlag = abi.decode(_returndata, (bool));
+        assertTrue(returnedFlag);
     }
 }
