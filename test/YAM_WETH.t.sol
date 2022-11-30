@@ -25,6 +25,12 @@ contract YAM_WETH_Test is Test {
         _;
     }
 
+    modifier acceptsETH(address _recipient) {
+        (bool success, ) = _recipient.call{value: 1 wei}("");
+        vm.assume(success);
+        _;
+    }
+
     function setUp() public {
         weth = new YAM_WETH(permit2);
     }
@@ -77,6 +83,56 @@ contract YAM_WETH_Test is Test {
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.ZeroAddress.selector);
         weth.depositTo{value: _amount}(address(0));
+    }
+
+    function testWithdraw(
+        address _account,
+        uint96 _initialWethBalance,
+        uint96 _withdrawAmount
+    ) public not0(_account) acceptsETH(_account) {
+        vm.assume(_initialWethBalance >= _withdrawAmount);
+        setupBalance(_account, _initialWethBalance);
+        uint balBefore = _account.balance;
+        vm.prank(_account);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_account, address(0), _withdrawAmount);
+        assertTrue(weth.withdraw(_withdrawAmount));
+        assertEq(weth.balanceOf(_account), _initialWethBalance - _withdrawAmount);
+        assertEq(_account.balance, balBefore + _withdrawAmount);
+    }
+
+    function testWithdrawTo(
+        address _from,
+        address _to,
+        uint96 _initialWethBalance,
+        uint96 _withdrawAmount
+    ) public not0(_from) not0(_to) acceptsETH(_to) {
+        vm.assume(_initialWethBalance >= _withdrawAmount);
+        setupBalance(_from, _initialWethBalance);
+
+        uint wethBalBefore = address(weth).balance;
+        uint toBalBefore = _to.balance;
+
+        vm.prank(_from);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _withdrawAmount);
+        assertTrue(weth.withdrawTo(_to, _withdrawAmount));
+
+        assertEq(weth.balanceOf(_from), _initialWethBalance - _withdrawAmount);
+        assertEq(_to.balance, toBalBefore + _withdrawAmount);
+        assertEq(address(weth).balance, wethBalBefore - _withdrawAmount);
+    }
+
+    function testCannotWithdrawInsufficientBalance(
+        address _account,
+        uint96 _initialWethBalance,
+        uint96 _withdrawAmount
+    ) public not0(_account) {
+        vm.assume(_initialWethBalance < _withdrawAmount);
+        setupBalance(_account, _initialWethBalance);
+        vm.prank(_account);
+        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
+        weth.withdraw(_withdrawAmount);
     }
 
     function testSetOperator(
