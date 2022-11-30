@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.15;
 
-contract YAM_WETH {
-    uint256 internal constant TOTAL_SUPPLY_SLOT = 0;
+import {IYAM_WETH} from "./IYAM_WETH.sol";
+
+contract YAM_WETH is IYAM_WETH {
     uint internal constant TOTAL_SUPPLY_SLOT = 0;
 
     address public immutable PERMIT2;
@@ -10,13 +11,10 @@ contract YAM_WETH {
     uint internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
     uint internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
-    event Transfer(address indexed from, address indexed to, uint256 amount);
     bytes32 internal constant TRANSFER_EVENT_SIG = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
 
-    event Approval(address indexed owner, address indexed spender, uint256 amount);
     bytes32 internal constant APPROVAL_EVENT_SIG = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925;
 
-    event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
     bytes32 internal constant PRIMARY_OPERATOR_EVENT_SIG =
         0x887b30d73fc01ab8c24c20c0b64cdd39b55b1e2b705237e4e4945e634e31ba74;
 
@@ -253,7 +251,7 @@ contract YAM_WETH {
         uint8 _v,
         bytes32 _r,
         bytes32 _s
-    ) external {
+    ) external payable {
         bytes32 domainSeparator = DOMAIN_SEPARATOR();
         assembly {
             if gt(timestamp(), _deadline) {
