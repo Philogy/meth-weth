@@ -47,6 +47,10 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.balanceOf(_account), 0);
     }
 
+    function testDefaultAllowance(address _owner, address _spender) public not0(_owner) {
+        assertEq(weth.allowance(_owner, _spender), 0);
+    }
+
     function testDeposit(address _account, uint96 _amount) public not0(_account) {
         vm.deal(_account, _amount);
         vm.prank(_account);
@@ -215,6 +219,24 @@ contract YAM_WETH_Test is Test {
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
         weth.transfer(_to, _transferAmount);
+    }
+
+    function testApprove(address _owner, address _spender, uint _allowance) public not0(_owner) {
+        vm.prank(_owner);
+        vm.expectEmit(true, true, true, true);
+        emit Approval(_owner, _spender, _allowance);
+        assertTrue(weth.approve(_spender, _allowance));
+        assertEq(weth.allowance(_owner, _spender), _allowance);
+    }
+
+    function testPreventsDirtyApprove(address _owner, uint _dirtySpender, uint _allowance) public not0(_owner) {
+        vm.assume(_dirtySpender > type(uint160).max);
+        vm.prank(_owner);
+        (bool success, bytes memory returnData) = address(weth).call(
+            abi.encodeWithSelector(YAM_WETH.approve.selector, _dirtySpender, _allowance)
+        );
+        assertFalse(success);
+        assertEq(returnData, "");
     }
 
     function calldata1() public {
