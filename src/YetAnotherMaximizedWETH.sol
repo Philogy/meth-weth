@@ -342,10 +342,11 @@ contract YAM_WETH {
     }
 
     function _useAllowance(address _from, uint256 _amount) internal returns (bytes32 fromData) {
+        address permit2 = PERMIT2;
         assembly {
             fromData := sload(_from)
 
-            if iszero(or(eq(caller(), shr(96, fromData)), eq(caller(), PERMIT2))) {
+            if iszero(or(eq(caller(), shr(96, fromData)), eq(caller(), permit2))) {
                 // Not primary operator or Permit2, check allowance
                 mstore(0x00, _from)
                 mstore(0x20, caller())
