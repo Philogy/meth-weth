@@ -2,7 +2,7 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-viaIR = true
+viaIR = false
 
 [fuzz]
 runs = 10000

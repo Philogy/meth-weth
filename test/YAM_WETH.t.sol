@@ -64,8 +64,6 @@ contract YAM_WETH_Test is Test {
     function testTransfer(
         address _from,
         address _to,
-        address _fromOperator,
-        address _toOperator,
         uint96 _fromStartBal,
         uint96 _toStartBal,
         uint96 _transferAmount
@@ -77,8 +75,6 @@ contract YAM_WETH_Test is Test {
         vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= uint(type(uint96).max));
         setupBalance(_from, _fromStartBal);
         setupBalance(_to, _toStartBal);
-        setupOperator(_from, _fromOperator);
-        setupOperator(_to, _toOperator);
 
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
@@ -86,8 +82,6 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.transfer(_to, _transferAmount));
         assertEq(weth.balanceOf(_from), _fromStartBal - _transferAmount, "from bal mismatch");
         assertEq(weth.balanceOf(_to), _toStartBal + _transferAmount, "to bal mismatch");
-        assertEq(weth.primaryOperatorOf(_from), _fromOperator);
-        assertEq(weth.primaryOperatorOf(_to), _toOperator);
     }
 
     function calldata1() public {
