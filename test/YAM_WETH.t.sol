@@ -50,6 +50,35 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.balanceOf(_account), _amount);
     }
 
+    function testDepositFallback(address _account, uint96 _amount) public not0(_account) {
+        vm.deal(_account, _amount);
+        vm.prank(_account);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), _account, _amount);
+        (bool success, bytes memory returnData) = address(weth).call{value: _amount}("");
+        assertTrue(success);
+        bool depositSuccess = abi.decode(returnData, (bool));
+        assertTrue(depositSuccess);
+        assertEq(weth.balanceOf(_account), _amount);
+    }
+
+    function testDepositTo(address _from, address _to, uint96 _amount) public not0(_from) not0(_to) {
+        vm.deal(_from, _amount);
+        vm.prank(_from);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), _to, _amount);
+        assertTrue(weth.depositTo{value: _amount}(_to));
+        assertEq(weth.balanceOf(_to), _amount);
+        if (_from != _to) assertEq(weth.balanceOf(_from), 0);
+    }
+
+    function testCannotDepositToZero(address _from, uint96 _amount) public not0(_from) {
+        vm.deal(_from, _amount);
+        vm.prank(_from);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.depositTo{value: _amount}(address(0));
+    }
+
     function testSetOperator(
         address _account,
         address _operator1,
@@ -73,6 +102,14 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.primaryOperatorOf(_account), _operator2);
     }
 
+    function testSupplyCap96(address _account, uint _amount) public not0(_account) {
+        vm.assume(_amount > uint(type(uint96).max));
+        vm.deal(_account, _amount);
+        vm.prank(_account);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.deposit{value: _amount}();
+    }
+
     function testTransfer(
         address _from,
         address _to,
@@ -91,6 +128,37 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.transfer(_to, _transferAmount));
         assertEq(weth.balanceOf(_from), _fromStartBal - _transferAmount, "from bal mismatch");
         assertEq(weth.balanceOf(_to), _toStartBal + _transferAmount, "to bal mismatch");
+    }
+
+    function testTransferFromAsOperator(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _transferAmount
+    ) public not0(_operator) not0(_from) not0(_to) notEq(_from, _to) {
+        setupOperator(_from, _operator);
+        setupBalance(_from, _transferAmount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, _to, _transferAmount);
+        assertTrue(weth.transferFrom(_from, _to, _transferAmount));
+        assertEq(weth.balanceOf(_from), 0, "from bal mismatch");
+        assertEq(weth.balanceOf(_to), _transferAmount, "to bal mismatch");
+        assertEq(weth.primaryOperatorOf(_from), _operator);
+    }
+
+    function testCannotTransferInsufficientBalance(
+        address _from,
+        address _to,
+        uint96 _fromStartBal,
+        uint96 _transferAmount
+    ) public not0(_from) not0(_to) {
+        vm.assume(_fromStartBal < _transferAmount);
+        setupBalance(_from, _fromStartBal);
+        vm.prank(_from);
+        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
+        weth.transfer(_to, _transferAmount);
     }
 
     function calldata1() public {
