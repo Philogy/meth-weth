@@ -15,6 +15,16 @@ contract YAM_WETH_Test is Test {
     event Approval(address indexed owner, address indexed spender, uint amount);
     event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
 
+    modifier not0(address _addr) {
+        vm.assume(_addr != address(0));
+        _;
+    }
+
+    modifier notEq(address _a, address _b) {
+        vm.assume(_a != _b);
+        _;
+    }
+
     function setUp() public {
         weth = new YAM_WETH(permit2);
     }
@@ -27,13 +37,11 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.symbol(), "WETH");
     }
 
-    function testDefaultBalance(address _account) public {
-        vm.assume(_account != address(0));
+    function testDefaultBalance(address _account) public not0(_account) {
         assertEq(weth.balanceOf(_account), 0);
     }
 
-    function testDeposit(address _account, uint96 _amount) public {
-        vm.assume(_account != address(0));
+    function testDeposit(address _account, uint96 _amount) public not0(_account) {
         vm.deal(_account, _amount);
         vm.prank(_account);
         vm.expectEmit(true, true, true, true);
@@ -42,8 +50,12 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.balanceOf(_account), _amount);
     }
 
-    function testSetOperator(address _account, address _operator1, address _operator2, uint96 _initialBalance) public {
-        vm.assume(_account != address(0));
+    function testSetOperator(
+        address _account,
+        address _operator1,
+        address _operator2,
+        uint96 _initialBalance
+    ) public not0(_account) {
         setupBalance(_account, _initialBalance);
 
         vm.prank(_account);
@@ -67,10 +79,7 @@ contract YAM_WETH_Test is Test {
         uint96 _fromStartBal,
         uint96 _toStartBal,
         uint96 _transferAmount
-    ) public {
-        vm.assume(_from != address(0));
-        vm.assume(_to != address(0));
-        vm.assume(_from != _to);
+    ) public not0(_from) not0(_to) notEq(_from, _to) {
         vm.assume(_transferAmount <= _fromStartBal);
         vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= uint(type(uint96).max));
         setupBalance(_from, _fromStartBal);
