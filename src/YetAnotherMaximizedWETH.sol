@@ -2,8 +2,12 @@
 pragma solidity 0.8.15;
 
 import {IYAM_WETH} from "./IYAM_WETH.sol";
+import {Multicallable} from "solady/utils/Multicallable.sol";
 
-contract YAM_WETH is IYAM_WETH {
+/// @dev To ensure safety with multicall use of `msg.value` (`callvalue()`) is avoided, instead the
+/// available ETH that can be used is determine by the difference between the contract's balance and
+/// the total supply.
+contract YAM_WETH is IYAM_WETH, Multicallable {
     uint internal constant TOTAL_SUPPLY_SLOT = 0;
 
     address public immutable PERMIT2;
