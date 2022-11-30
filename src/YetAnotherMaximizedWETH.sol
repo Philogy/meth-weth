@@ -344,6 +344,17 @@ contract YAM_WETH is IYAM_WETH {
         }
     }
 
+    function nonces(address _account) external view returns (uint) {
+        assembly {
+            if iszero(_account) {
+                revert(0x00, 0x00)
+            }
+            let nonce := sload(shl(96, _account))
+            mstore(0x00, nonce)
+            return(0x00, 0x20)
+        }
+    }
+
     function _depositAllTo(address _to) internal {
         assembly {
             if iszero(_to) {
