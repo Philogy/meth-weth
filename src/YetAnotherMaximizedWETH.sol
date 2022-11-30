@@ -19,11 +19,29 @@ contract YAM_WETH {
     bytes32 internal constant PRIMARY_OPERATOR_EVENT_SIG =
         0x887b30d73fc01ab8c24c20c0b64cdd39b55b1e2b705237e4e4945e634e31ba74;
 
+    // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+    bytes32 internal constant EIP712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
+    // keccak256("Yet Another Maximized Wrapped Ether Contract")
+    bytes32 internal constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76;
+    // keccak256("1")
+    bytes32 internal constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6;
+    bytes32 internal immutable CACHED_DOMAIN_SEPARATOR;
+    uint256 internal immutable CACHED_CHAINID;
+
+    // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
+    bytes32 internal constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
+
+    address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
+    bytes32 private constant MALLEABILITY_THRESHOLD =
+        0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
+
     error InsufficientBalance();
     error InsufficientFreeBalance();
     error InsufficientPermission();
     error ZeroAddress();
     error TotalSupplyOverflow();
+    error PermitExpired();
+    error InvalidSignature();
 
     modifier succeeds() {
         _;
@@ -35,6 +53,8 @@ contract YAM_WETH {
 
     constructor(address _permit2) {
         PERMIT2 = _permit2;
+        CACHED_DOMAIN_SEPARATOR = _computeDomainSeparator();
+        CACHED_CHAINID = block.chainid;
     }
 
     receive() external payable {
@@ -224,6 +244,65 @@ contract YAM_WETH {
         _withdrawFromTo(_from, _to, _amount);
     }
 
+    function permit(
+        address _owner,
+        address _spender,
+        uint256 _allowance,
+        uint256 _deadline,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    ) external {
+        bytes32 domainSeparator = DOMAIN_SEPARATOR();
+        assembly {
+            if gt(timestamp(), _deadline) {
+                mstore(0x00, 0x1a15a3cc)
+                revert(0x1c, 0x04)
+            }
+
+            // Prepare main permit fields.
+            mstore(0x00, PERMIT_TYPE_HASH)
+            mstore(0x20, _owner)
+            mstore(0x40, _spender)
+            mstore(0x60, _allowance)
+            mstore(0xa0, _deadline)
+
+            // Get and update nonce.
+            let nonceSlot := shl(96, _owner)
+            let nonce := sload(nonceSlot)
+            sstore(nonceSlot, add(nonce, 1))
+            mstore(0x80, nonce)
+
+            let permitStructHash := keccak256(0x00, 0xc0)
+
+            // Change allowance before necessary memory values overwritten.
+            let allowanceSlot := keccak256(0x20, 0x40)
+            sstore(allowanceSlot, _allowance)
+            log3(0x60, 0x20, APPROVAL_EVENT_SIG, _owner, _spender)
+
+            // Calculate final encoded struct hash
+            mstore(0x00, 0x1901)
+            mstore(0x20, domainSeparator)
+            mstore(0x40, permitStructHash)
+            let encodedStruct := keccak256(0x1e, 0x42)
+
+            // Perform ecrecover.
+            mstore(0x00, encodedStruct)
+            mstore(0x20, _v)
+            mstore(0x40, _r)
+            mstore(0x60, _s)
+            pop(staticcall(gas(), EC_RECOVER_PRECOMPILE, 0x00, 0x80, 0x00, 0x20))
+            let recoveredSigner := mload(0x20)
+
+            if or(gt(_s, MALLEABILITY_THRESHOLD), or(lt(returndatasize(), 0x20), sub(recoveredSigner, _owner))) {
+                mstore(0x00, 0x8baa579f)
+                revert(0x1c, 0x04)
+            }
+
+            stop()
+        }
+    }
+
     function balanceOf(address _account) external view returns (uint256) {
         assembly {
             if iszero(_account) {
@@ -249,6 +328,10 @@ contract YAM_WETH {
             mstore(0x00, sload(TOTAL_SUPPLY_SLOT))
             return(0x00, 0x20)
         }
+    }
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return block.chainid == CACHED_CHAINID ? CACHED_DOMAIN_SEPARATOR : _computeDomainSeparator();
     }
 
     function primaryOperatorOf(address _account) external view returns (address) {
@@ -388,6 +471,18 @@ contract YAM_WETH {
                 returndatacopy(0x00, 0x00, returndatasize())
                 return(0x00, returndatasize())
             }
+        }
+    }
+
+    function _computeDomainSeparator() internal view returns (bytes32 domainSeparator) {
+        assembly {
+            let freeMem := mload(0x40)
+            mstore(freeMem, EIP712_DOMAIN_HASH)
+            mstore(add(freeMem, 0x20), NAME_HASH)
+            mstore(add(freeMem, 0x40), VERSION_HASH)
+            mstore(add(freeMem, 0x60), chainid())
+            mstore(add(freeMem, 0x80), address())
+            domainSeparator := keccak256(freeMem, 0xa0)
         }
     }
 }
