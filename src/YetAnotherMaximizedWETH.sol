@@ -291,7 +291,7 @@ contract YAM_WETH is IYAM_WETH {
             mstore(0x40, _r)
             mstore(0x60, _s)
             pop(staticcall(gas(), EC_RECOVER_PRECOMPILE, 0x00, 0x80, 0x00, 0x20))
-            let recoveredSigner := mload(0x20)
+            let recoveredSigner := mload(0x00)
 
             if or(gt(_s, MALLEABILITY_THRESHOLD), or(lt(returndatasize(), 0x20), sub(recoveredSigner, _owner))) {
                 mstore(0x00, 0x8baa579f)
