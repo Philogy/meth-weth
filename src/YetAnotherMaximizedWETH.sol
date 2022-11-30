@@ -266,7 +266,7 @@ contract YAM_WETH is IYAM_WETH {
             mstore(0x60, _allowance)
             mstore(0xa0, _deadline)
 
-            // Get and update nonce.
+            // Use nonce.
             let nonceSlot := shl(96, _owner)
             let nonce := sload(nonceSlot)
             sstore(nonceSlot, add(nonce, 1))
@@ -279,7 +279,7 @@ contract YAM_WETH is IYAM_WETH {
             sstore(allowanceSlot, _allowance)
             log3(0x60, 0x20, APPROVAL_EVENT_SIG, _owner, _spender)
 
-            // Calculate final encoded struct hash
+            // Calculate final encoded struct hash.
             mstore(0x00, 0x1901)
             mstore(0x20, domainSeparator)
             mstore(0x40, permitStructHash)
