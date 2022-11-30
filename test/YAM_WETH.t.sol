@@ -272,6 +272,29 @@ contract YAM_WETH_Test is Test {
         assertEq(returnData, "");
     }
 
+    function testPreventsDirtyAllowance(uint _dirtyOwner, uint _dirtySpender) public {
+        vm.assume(_dirtyOwner > type(uint160).max || _dirtySpender > type(uint160).max);
+        (bool success, bytes memory returnData) = address(weth).staticcall(
+            abi.encodeWithSelector(YAM_WETH.allowance.selector, _dirtyOwner, _dirtySpender)
+        );
+        assertFalse(success);
+        assertEq(returnData, "");
+    }
+
+    function testPreventsDirtyTransferFrom(
+        address _operator,
+        uint _dirtyFrom,
+        address _to
+    ) public not0(_operator) not0(_to) {
+        vm.assume(_dirtyFrom > type(uint160).max);
+        vm.prank(_operator);
+        (bool success, bytes memory returnData) = address(weth).call(
+            abi.encodeWithSelector(YAM_WETH.transferFrom.selector, _dirtyFrom, _to, 0)
+        );
+        assertFalse(success);
+        assertEq(returnData, "");
+    }
+
     function calldata1() public {
         YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](3);
         deposits[0] = YAM_WETH.Deposit(vm.addr(20), 1);
