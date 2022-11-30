@@ -237,13 +237,9 @@ contract YAM_WETH {
 
     function allowance(address _account, address _spender) external view returns (uint256) {
         assembly {
-            let data := sload(_account)
-            mstore(0x00, not(0))
-            if iszero(or(eq(shr(96, data), _spender), eq(_spender, PERMIT2))) {
-                mstore(0x00, _account)
-                mstore(0x20, _spender)
-                mstore(0x00, sload(keccak256(0x00, 0x40)))
-            }
+            mstore(0x00, _account)
+            mstore(0x20, _spender)
+            mstore(0x00, sload(keccak256(0x00, 0x40)))
             return(0x00, 0x20)
         }
     }
