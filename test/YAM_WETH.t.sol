@@ -15,6 +15,12 @@ contract YAM_WETH_Test is Test {
     event Approval(address indexed owner, address indexed spender, uint amount);
     event PrimaryOperatorSet(address indexed account, address indexed prevOperator, address indexed newOperator);
 
+    modifier realAddr(address _addr) {
+        vm.assume(_addr != address(0));
+        vm.assume(_addr != address(weth));
+        _;
+    }
+
     modifier not0(address _addr) {
         vm.assume(_addr != address(0));
         _;
@@ -43,15 +49,15 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.symbol(), "WETH");
     }
 
-    function testDefaultBalance(address _account) public not0(_account) {
+    function testDefaultBalance(address _account) public realAddr(_account) {
         assertEq(weth.balanceOf(_account), 0);
     }
 
-    function testDefaultAllowance(address _owner, address _spender) public not0(_owner) {
+    function testDefaultAllowance(address _owner, address _spender) public realAddr(_owner) {
         assertEq(weth.allowance(_owner, _spender), 0);
     }
 
-    function testDeposit(address _account, uint96 _amount) public not0(_account) {
+    function testDeposit(address _account, uint96 _amount) public realAddr(_account) {
         vm.deal(_account, _amount);
         vm.prank(_account);
         vm.expectEmit(true, true, true, true);
@@ -60,7 +66,7 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.balanceOf(_account), _amount);
     }
 
-    function testDepositFallback(address _account, uint96 _amount) public not0(_account) {
+    function testDepositFallback(address _account, uint96 _amount) public realAddr(_account) {
         vm.deal(_account, _amount);
         vm.prank(_account);
         vm.expectEmit(true, true, true, true);
@@ -70,7 +76,7 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.balanceOf(_account), _amount);
     }
 
-    function testDepositTo(address _from, address _to, uint96 _amount) public not0(_from) not0(_to) {
+    function testDepositTo(address _from, address _to, uint96 _amount) public realAddr(_from) not0(_to) {
         vm.deal(_from, _amount);
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
@@ -80,7 +86,7 @@ contract YAM_WETH_Test is Test {
         if (_from != _to) assertEq(weth.balanceOf(_from), 0);
     }
 
-    function testCannotDepositToZero(address _from, uint96 _amount) public not0(_from) {
+    function testCannotDepositToZero(address _from, uint96 _amount) public realAddr(_from) {
         vm.deal(_from, _amount);
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.ZeroAddress.selector);
@@ -91,7 +97,7 @@ contract YAM_WETH_Test is Test {
         address _account,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public not0(_account) acceptsETH(_account) {
+    ) public realAddr(_account) acceptsETH(_account) {
         vm.assume(_initialWethBalance >= _withdrawAmount);
         setupBalance(_account, _initialWethBalance);
         uint balBefore = _account.balance;
@@ -108,7 +114,7 @@ contract YAM_WETH_Test is Test {
         address _to,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public not0(_from) not0(_to) acceptsETH(_to) {
+    ) public realAddr(_from) not0(_to) acceptsETH(_to) {
         vm.assume(_initialWethBalance >= _withdrawAmount);
         setupBalance(_from, _initialWethBalance);
 
@@ -129,7 +135,7 @@ contract YAM_WETH_Test is Test {
         address _account,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public not0(_account) {
+    ) public realAddr(_account) {
         vm.assume(_initialWethBalance < _withdrawAmount);
         setupBalance(_account, _initialWethBalance);
         vm.prank(_account);
@@ -142,7 +148,7 @@ contract YAM_WETH_Test is Test {
         address _operator1,
         address _operator2,
         uint96 _initialBalance
-    ) public not0(_account) {
+    ) public realAddr(_account) {
         setupBalance(_account, _initialBalance);
 
         vm.prank(_account);
@@ -160,7 +166,7 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.primaryOperatorOf(_account), _operator2);
     }
 
-    function testSupplyCap96(address _account, uint _amount) public not0(_account) {
+    function testSupplyCap96(address _account, uint _amount) public realAddr(_account) {
         vm.assume(_amount > uint(type(uint96).max));
         vm.deal(_account, _amount);
         vm.prank(_account);
@@ -174,9 +180,9 @@ contract YAM_WETH_Test is Test {
         uint96 _fromStartBal,
         uint96 _toStartBal,
         uint96 _transferAmount
-    ) public not0(_from) not0(_to) {
+    ) public realAddr(_from) not0(_to) {
         vm.assume(_transferAmount <= _fromStartBal);
-        vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= uint(type(uint96).max));
+        vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= type(uint96).max);
         setupBalance(_from, _fromStartBal);
         setupBalance(_to, _toStartBal);
 
@@ -190,7 +196,7 @@ contract YAM_WETH_Test is Test {
         }
     }
 
-    function testCannotTransferToZero(address _from, uint96 _amount) public not0(_from) {
+    function testCannotTransferToZero(address _from, uint96 _amount) public realAddr(_from) {
         setupBalance(_from, _amount);
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.ZeroAddress.selector);
@@ -201,7 +207,7 @@ contract YAM_WETH_Test is Test {
         address _operator,
         address _from,
         uint96 _amount
-    ) public not0(_operator) not0(_from) notEq(_operator, permit2) {
+    ) public realAddr(_operator) realAddr(_from) notEq(_operator, permit2) {
         setupBalance(_from, _amount);
         setupOperator(_from, _operator);
 
@@ -214,7 +220,7 @@ contract YAM_WETH_Test is Test {
         address _operator,
         address _to,
         uint96 _amount
-    ) public not0(_operator) not0(_to) notEq(_operator, permit2) {
+    ) public realAddr(_operator) not0(_to) notEq(_operator, permit2) {
         // ensure supply
         setupBalance(vm.addr(1), 100e18);
 
@@ -228,7 +234,7 @@ contract YAM_WETH_Test is Test {
         address _from,
         address _to,
         uint96 _transferAmount
-    ) public not0(_operator) not0(_from) not0(_to) notEq(_operator, permit2) {
+    ) public realAddr(_operator) realAddr(_from) not0(_to) notEq(_operator, permit2) {
         setupOperator(_from, _operator);
         setupBalance(_from, _transferAmount);
 
@@ -246,7 +252,7 @@ contract YAM_WETH_Test is Test {
         address _to,
         uint96 _fromStartBal,
         uint96 _transferAmount
-    ) public not0(_from) not0(_to) {
+    ) public realAddr(_from) not0(_to) {
         vm.assume(_fromStartBal < _transferAmount);
         setupBalance(_from, _fromStartBal);
         vm.prank(_from);
@@ -254,7 +260,7 @@ contract YAM_WETH_Test is Test {
         weth.transfer(_to, _transferAmount);
     }
 
-    function testApprove(address _owner, address _spender, uint _allowance) public not0(_owner) {
+    function testApprove(address _owner, address _spender, uint _allowance) public realAddr(_owner) {
         vm.prank(_owner);
         vm.expectEmit(true, true, true, true);
         emit Approval(_owner, _spender, _allowance);
@@ -262,7 +268,7 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.allowance(_owner, _spender), _allowance);
     }
 
-    function testPreventsDirtyApprove(address _owner, uint _dirtySpender, uint _allowance) public not0(_owner) {
+    function testPreventsDirtyApprove(address _owner, uint _dirtySpender, uint _allowance) public realAddr(_owner) {
         vm.assume(_dirtySpender > type(uint160).max);
         vm.prank(_owner);
         (bool success, bytes memory returnData) = address(weth).call(
@@ -285,7 +291,7 @@ contract YAM_WETH_Test is Test {
         address _operator,
         uint _dirtyFrom,
         address _to
-    ) public not0(_operator) not0(_to) {
+    ) public realAddr(_operator) not0(_to) {
         vm.assume(_dirtyFrom > type(uint160).max);
         vm.prank(_operator);
         (bool success, bytes memory returnData) = address(weth).call(
