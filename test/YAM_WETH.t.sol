@@ -32,8 +32,10 @@ contract YAM_WETH_Test is Test {
     }
 
     modifier acceptsETH(address _recipient) {
-        (bool success, ) = _recipient.call{value: 1 wei}("");
-        vm.assume(success);
+        if (_recipient != address(weth)) {
+            (bool success, ) = _recipient.call{value: 1 wei}("");
+            vm.assume(success);
+        }
         _;
     }
 
@@ -64,6 +66,7 @@ contract YAM_WETH_Test is Test {
         emit Transfer(address(0), _account, _amount);
         assertTrue(weth.deposit{value: _amount}());
         assertEq(weth.balanceOf(_account), _amount);
+        assertEq(weth.totalSupply(), _amount);
     }
 
     function testDepositFallback(address _account, uint96 _amount) public realAddr(_account) {
@@ -74,6 +77,7 @@ contract YAM_WETH_Test is Test {
         (bool success, bytes memory returnData) = address(weth).call{value: _amount}("");
         assertSucceeded(success, returnData);
         assertEq(weth.balanceOf(_account), _amount);
+        assertEq(weth.totalSupply(), _amount);
     }
 
     function testDepositTo(address _from, address _to, uint96 _amount) public realAddr(_from) not0(_to) {
@@ -84,6 +88,7 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.depositTo{value: _amount}(_to));
         assertEq(weth.balanceOf(_to), _amount);
         if (_from != _to) assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), _amount);
     }
 
     function testCannotDepositToZero(address _from, uint96 _amount) public realAddr(_from) {
@@ -91,6 +96,36 @@ contract YAM_WETH_Test is Test {
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.ZeroAddress.selector);
         weth.depositTo{value: _amount}(address(0));
+    }
+
+    function testDepositAmount(address _account, uint96 _value, uint96 _depositAmount) public realAddr(_account) {
+        vm.assume(_value >= _depositAmount);
+        vm.deal(_account, _value);
+        vm.prank(_account);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), _account, _depositAmount);
+        assertTrue(weth.depositAmount{value: _value}(_depositAmount));
+        assertEq(weth.balanceOf(_account), _depositAmount);
+        assertEq(address(weth).balance, _value);
+        assertEq(weth.totalSupply(), _depositAmount);
+    }
+
+    function testDepositAmountTo(
+        address _from,
+        address _to,
+        uint96 _value,
+        uint96 _depositAmount
+    ) public realAddr(_from) not0(_to) {
+        vm.assume(_value >= _depositAmount);
+        vm.deal(_from, _value);
+        vm.prank(_from);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), _to, _depositAmount);
+        assertTrue(weth.depositAmountTo{value: _value}(_to, _depositAmount));
+        assertEq(weth.balanceOf(_to), _depositAmount);
+        if (_from != _to) assertEq(weth.balanceOf(_from), 0);
+        assertEq(address(weth).balance, _value);
+        assertEq(weth.totalSupply(), _depositAmount);
     }
 
     function testWithdraw(
