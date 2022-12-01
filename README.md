@@ -71,5 +71,11 @@ Allowance `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))`
 ERC-2612 Permit Nonce of `account` | `slot = account << 96` | (255-0: `nonce`)
 
 ## Invariants
-- `msg.sender` (`caller()`) cannot be zero-address
-- Permit2 will not call `transferFrom` with `from` being the zero-address
+Environment (Env) or external (Ext) dependency based invariants are assumed facts that if broken would allow for
+some failures in the contract. Internal (Int) invariants are invariants that are expected to hold
+for the logic, violations are unintended bugs and potential vulnerabilities.
+
+- (Env): `msg.sender` (`caller()`) cannot be zero-address
+- (Ext): Permit2 will not call `transferFrom` with `from` being the zero-address
+- (Int): total supply should never exceed `2**96-1`
+- (Int): `balanceOf`, `primaryOperatorOf`, `nonces` will always return `0` for the zero-address
