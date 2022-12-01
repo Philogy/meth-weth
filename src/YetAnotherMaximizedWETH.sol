@@ -8,7 +8,8 @@ import {Multicallable} from "solady/utils/Multicallable.sol";
 /// available ETH that can be used is determine by the difference between the contract's balance and
 /// the total supply.
 contract YAM_WETH is IYAM_WETH, Multicallable {
-    uint internal constant TOTAL_SUPPLY_SLOT = 0;
+    // keccak256("YAM_WETH.totalSupply") - 1
+    bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
 
     address public immutable PERMIT2;
 
@@ -308,9 +309,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function balanceOf(address _account) external view returns (uint) {
         assembly {
-            if iszero(_account) {
-                revert(0x00, 0x00)
-            }
             let bal := and(sload(_account), BALANCE_MASK)
             mstore(0x00, bal)
             return(0x00, 0x20)
@@ -339,9 +337,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function primaryOperatorOf(address _account) external view returns (address) {
         assembly {
-            if iszero(_account) {
-                revert(0x00, 0x00)
-            }
             let data := sload(_account)
             mstore(0x00, shr(96, data))
             return(0x00, 0x20)
@@ -350,9 +345,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function nonces(address _account) external view returns (uint) {
         assembly {
-            if iszero(_account) {
-                revert(0x00, 0x00)
-            }
             let nonce := sload(shl(96, _account))
             mstore(0x00, nonce)
             return(0x00, 0x20)
