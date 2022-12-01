@@ -5,6 +5,6 @@ libs = ['lib']
 viaIR = false
 
 [fuzz]
-runs = 10000
+runs = 256
 
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
