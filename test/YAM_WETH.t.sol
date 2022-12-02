@@ -7,8 +7,6 @@ import {YAM_WETH} from "../src/YetAnotherMaximizedWETH.sol";
 contract YAM_WETH_Test is Test {
     YAM_WETH weth;
 
-    address mainUser = vm.addr(1);
-
     address permit2 = vm.addr(0x929829);
 
     event Transfer(address indexed from, address indexed to, uint amount);
@@ -177,7 +175,7 @@ contract YAM_WETH_Test is Test {
         address _to,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public realAddr(_from) not0(_to) acceptsETH(_to) {
+    ) public not0(_from) realAddr(_to) acceptsETH(_to) {
         vm.assume(_initialWethBalance >= _withdrawAmount);
         setupBalance(_from, _initialWethBalance);
 
@@ -334,20 +332,21 @@ contract YAM_WETH_Test is Test {
     function testPreventsDirtyApprove(address _owner, uint _dirtySpender, uint _allowance) public realAddr(_owner) {
         vm.assume(_dirtySpender > type(uint160).max);
         vm.prank(_owner);
-        (bool success, bytes memory returnData) = address(weth).call(
+        vm.expectRevert(bytes(""));
+        (bool success, ) = address(weth).call(
             abi.encodeWithSelector(YAM_WETH.approve.selector, _dirtySpender, _allowance)
         );
-        assertFalse(success);
-        assertEq(returnData, "");
+        assertTrue(success);
     }
 
     function testPreventsDirtyAllowance(uint _dirtyOwner, uint _dirtySpender) public {
         vm.assume(_dirtyOwner > type(uint160).max || _dirtySpender > type(uint160).max);
-        (bool success, bytes memory returnData) = address(weth).staticcall(
+
+        vm.expectRevert(bytes(""));
+        (bool success, ) = address(weth).staticcall(
             abi.encodeWithSelector(YAM_WETH.allowance.selector, _dirtyOwner, _dirtySpender)
         );
-        assertFalse(success);
-        assertEq(returnData, "");
+        assertTrue(success);
     }
 
     function testPreventsDirtyTransferFrom(
@@ -357,11 +356,11 @@ contract YAM_WETH_Test is Test {
     ) public realAddr(_operator) not0(_to) {
         vm.assume(_dirtyFrom > type(uint160).max);
         vm.prank(_operator);
-        (bool success, bytes memory returnData) = address(weth).call(
+        vm.expectRevert(bytes(""));
+        (bool success, ) = address(weth).call(
             abi.encodeWithSelector(YAM_WETH.transferFrom.selector, _dirtyFrom, _to, 0)
         );
-        assertFalse(success);
-        assertEq(returnData, "");
+        assertTrue(success);
     }
 
     function calldata1() public {
