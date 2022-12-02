@@ -128,6 +128,34 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.totalSupply(), _depositAmount);
     }
 
+    function testDepositAmountsTo() public {
+        address user1 = vm.addr(1001);
+        address user2 = vm.addr(2002);
+
+        uint96 baseBalance1 = 1e18;
+        setupBalance(user1, baseBalance1);
+        uint96 baseBalance2 = 2.1e18;
+        setupBalance(user2, baseBalance2);
+
+        uint amount1 = 390e18;
+        uint amount2 = 0.0238e18;
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](2);
+        deposits[0] = YAM_WETH.Deposit(user1, amount1);
+        deposits[1] = YAM_WETH.Deposit(user2, amount2);
+
+        address executor = vm.addr(1);
+
+        vm.deal(executor, amount1 + amount2);
+        vm.prank(executor);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), user2, amount2);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), user1, amount1);
+        assertTrue(weth.depositAmountsToMany{value: amount1 + amount2}(deposits));
+        assertEq(weth.balanceOf(user1), baseBalance1 + amount1);
+        assertEq(weth.balanceOf(user2), baseBalance2 + amount2);
+    }
+
     function testWithdraw(
         address _account,
         uint96 _initialWethBalance,
