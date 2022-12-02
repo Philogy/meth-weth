@@ -184,19 +184,19 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function depositAmountsToMany(Deposit[] calldata _deposits) external payable succeeds returns (bool) {
         assembly {
-            let depositsOffset := add(_deposits.offset, 0x04)
-            let totalDeposits := calldataload(depositsOffset)
+            let depositsOffset := _deposits.offset
+            let totalDeposits := _deposits.length
 
             let prevDepositTotal := 0
             let depositTotal := 0
 
             let hasErrors := 0
             // prettier-ignore
-            for { let i := totalDeposits } i { i := sub(i, 1) } {
-                let pos := shl(6, i)
+            for { let pos := shl(6, totalDeposits) } pos {} {
+                pos := sub(pos, 0x40)
                 prevDepositTotal := depositTotal
-                let recipient := calldataload(add(depositsOffset, sub(pos, 1)))
-                let amount := calldataload(add(depositsOffset, pos))
+                let recipient := calldataload(add(depositsOffset, pos))
+                let amount := calldataload(add(depositsOffset, add(pos, 0x20)))
                 depositTotal := add(depositTotal, amount)
                 // Checks that `depositTotal += amount` did not overflow and that recipient is
                 // a valid, non-zero address
