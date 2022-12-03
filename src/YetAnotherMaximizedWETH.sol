@@ -86,6 +86,15 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
+    function version() external pure returns (string memory) {
+        assembly {
+            // "1"
+            mstore(0x00, 0x20)
+            mstore(0x21, 0x0131)
+            return(0x00, 0x60)
+        }
+    }
+
     function decimals() external pure returns (uint8) {
         assembly {
             mstore(0x00, 0x12)

@@ -3,8 +3,14 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {YAM_WETH} from "../src/YetAnotherMaximizedWETH.sol";
+import {LibString} from "solady/utils/LibString.sol";
 
 contract YAM_WETH_Test is Test {
+    using LibString for address;
+    using LibString for uint;
+
+    uint internal constant MAX_PRIV_KEY =
+        115792089237316195423570985008687907852837564279074904382605163141518161494336;
     YAM_WETH weth;
 
     address permit2 = vm.addr(0x929829);
@@ -37,7 +43,12 @@ contract YAM_WETH_Test is Test {
         _;
     }
 
+    modifier realPrivKey(uint _privKey) {
+        vm.assume(_privKey != 0 && _privKey <= MAX_PRIV_KEY);
+        _;
+    }
     function setUp() public {
+        vm.chainId(1);
         weth = new YAM_WETH(permit2);
     }
 
@@ -47,6 +58,10 @@ contract YAM_WETH_Test is Test {
 
     function testSymbol() public {
         assertEq(weth.symbol(), "WETH");
+    }
+
+    function testVersion() public {
+        assertEq(weth.version(), "1");
     }
 
     function testDefaultBalance(address _account) public realAddr(_account) {
@@ -363,6 +378,144 @@ contract YAM_WETH_Test is Test {
         assertTrue(success);
     }
 
+    function testDomainSeparator() public {
+        assertEq(
+            keccak256(
+                abi.encode(
+                    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                    keccak256(bytes(weth.name())),
+                    keccak256(bytes(weth.version())),
+                    block.chainid,
+                    address(weth)
+                )
+            ),
+            weth.DOMAIN_SEPARATOR()
+        );
+
+        string[] memory eip712cmd = new string[](5);
+        eip712cmd[0] = "node";
+        eip712cmd[1] = "script/eip712.js";
+        eip712cmd[2] = "domain-separator";
+        eip712cmd[3] = address(weth).toHexStringChecksumed();
+        eip712cmd[4] = weth.name();
+        bytes32 actualDomainSeparator = bytes32(vm.ffi(eip712cmd));
+        assertEq(actualDomainSeparator, weth.DOMAIN_SEPARATOR(), "actual domain separator");
+    }
+
+    function testGetNonce(address _account, uint _nonce) external not0(_account) {
+        setupNonce(_account, _nonce);
+        assertEq(weth.nonces(_account), _nonce);
+    }
+
+    function testValidPermit(
+        uint _ownerPrivkey,
+        address _spender,
+        uint _allowance,
+        uint _nonce
+    ) public realPrivKey(_ownerPrivkey) {
+        vm.assume(_nonce != type(uint).max);
+
+        address owner = vm.addr(_ownerPrivkey);
+        setupNonce(owner, _nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            _ownerPrivkey,
+            computePermitHash(owner, _spender, _allowance, _nonce, block.timestamp)
+        );
+
+        vm.expectEmit(true, true, true, true);
+        emit Approval(owner, _spender, _allowance);
+        weth.permit(owner, _spender, _allowance, block.timestamp, v, r, s);
+        assertEq(weth.nonces(owner), _nonce + 1);
+        assertEq(weth.allowance(owner, _spender), _allowance);
+    }
+
+    function testCannotSubmitExpiredPermit(
+        uint _ownerPrivkey,
+        address _spender,
+        uint _allowance,
+        uint _nonce,
+        uint _deadline
+    ) public realPrivKey(_ownerPrivkey) {
+        vm.assume(_nonce != type(uint).max);
+        vm.assume(block.timestamp > _deadline);
+
+        address owner = vm.addr(_ownerPrivkey);
+        setupNonce(owner, _nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            _ownerPrivkey,
+            computePermitHash(owner, _spender, _allowance, _nonce, _deadline)
+        );
+
+        vm.expectRevert(YAM_WETH.PermitExpired.selector);
+        weth.permit(owner, _spender, _allowance, _deadline, v, r, s);
+    }
+
+    function testCannotSubmitInvalidSignaturePermit(
+        address _owner,
+        address _spender,
+        uint _allowance,
+        uint _nonce,
+        uint8 _v,
+        bytes32 _r,
+        bytes32 _s
+    ) public realAddr(_owner) realAddr(_spender) {
+        vm.assume(
+            ecrecover(computePermitHash(_owner, _spender, _allowance, _nonce, block.timestamp), _v, _r, _s) ==
+                address(0)
+        );
+        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        weth.permit(_owner, _spender, _allowance, block.timestamp, _v, _r, _s);
+    }
+
+    function testCannotSubmitImpersonatedPermit(
+        uint _fakePrivKey,
+        address _owner,
+        address _spender,
+        uint _allowance,
+        uint _nonce
+    ) public realPrivKey(_fakePrivKey) {
+        vm.assume(vm.addr(_fakePrivKey) != _owner);
+        setupNonce(_owner, _nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            _fakePrivKey,
+            computePermitHash(_owner, _spender, _allowance, _nonce, block.timestamp)
+        );
+        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        weth.permit(_owner, _spender, _allowance, block.timestamp, v, r, s);
+    }
+
+    function testCannotSubmitInvalidNoncePermit(
+        uint _ownerPrivkey,
+        address _spender,
+        uint _allowance,
+        uint _nonce
+    ) public realPrivKey(_ownerPrivkey) {
+        vm.assume(_nonce != type(uint).max);
+
+        address owner = vm.addr(_ownerPrivkey);
+        setupNonce(owner, _nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            _ownerPrivkey,
+            computePermitHash(owner, _spender, _allowance, _nonce + 1, block.timestamp)
+        );
+
+        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        weth.permit(owner, _spender, _allowance, block.timestamp, v, r, s);
+    }
+
+    function testPermitHashScript(
+        address _owner,
+        address _spender,
+        uint _allowance,
+        uint _nonce,
+        uint _deadline
+    ) public {
+        bytes32 eip712Payload = computePermitHash(_owner, _spender, _allowance, _nonce, _deadline);
+        bytes32 actualPayload = getPermitHash(_owner, _spender, _allowance, _nonce, _deadline);
+
+        assertEq(actualPayload, eip712Payload);
+    }
+
     function calldata1() public {
         YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](3);
         deposits[0] = YAM_WETH.Deposit(vm.addr(20), 1);
@@ -381,6 +534,64 @@ contract YAM_WETH_Test is Test {
     function setupOperator(address _account, address _operator) internal {
         vm.prank(_account);
         weth.setPrimaryOperator(_operator);
+    }
+
+    function setupNonce(address _account, uint _nonce) internal {
+        vm.store(address(weth), bytes32(uint(uint160(_account)) << 96), bytes32(_nonce));
+    }
+
+    function setupAllowance(address _account, address _spender, uint _allowance) internal {
+        vm.prank(_account);
+        weth.approve(_spender, _allowance);
+    }
+
+    function computePermitHash(
+        address _owner,
+        address _spender,
+        uint _allowance,
+        uint _nonce,
+        uint _deadline
+    ) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    weth.DOMAIN_SEPARATOR(),
+                    keccak256(
+                        abi.encode(
+                            keccak256(
+                                "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                            ),
+                            _owner,
+                            _spender,
+                            _allowance,
+                            _nonce,
+                            _deadline
+                        )
+                    )
+                )
+            );
+    }
+
+    function getPermitHash(
+        address _owner,
+        address _spender,
+        uint _allowance,
+        uint _nonce,
+        uint _deadline
+    ) internal returns (bytes32) {
+        string[] memory eip712cmd = new string[](10);
+        eip712cmd[0] = "node";
+        eip712cmd[1] = "script/eip712.js";
+        eip712cmd[2] = "permit";
+        eip712cmd[3] = address(weth).toHexStringChecksumed();
+        eip712cmd[4] = weth.name();
+        eip712cmd[5] = _owner.toHexStringChecksumed();
+        eip712cmd[6] = _spender.toHexStringChecksumed();
+        eip712cmd[7] = _allowance.toString();
+        eip712cmd[8] = _nonce.toString();
+        eip712cmd[9] = _deadline.toString();
+        return bytes32(vm.ffi(eip712cmd));
     }
 
     function assertSucceeded(bool _success, bytes memory _returndata) internal {
