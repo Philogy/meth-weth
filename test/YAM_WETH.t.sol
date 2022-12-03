@@ -324,6 +324,46 @@ contract YAM_WETH_Test is Test {
         assertEq(weth.primaryOperatorOf(_from), _operator);
     }
 
+    function testTransferFromInfiniteApproval(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _transferAmount
+    ) public realAddr(_operator) realAddr(_from) not0(_to) notEq(_from, _to) {
+        setupBalance(_from, _transferAmount);
+
+        setupAllowance(_from, _operator, type(uint).max);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, _to, _transferAmount);
+        assertTrue(weth.transferFrom(_from, _to, _transferAmount));
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.balanceOf(_to), _transferAmount);
+        assertEq(weth.allowance(_from, _operator), type(uint).max);
+    }
+
+    function testTransferFromLimitedApproval(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _transferAmount,
+        uint _allowance
+    ) public realAddr(_operator) realAddr(_from) not0(_to) {
+        vm.assume(_allowance >= _transferAmount);
+        vm.assume(_allowance != type(uint).max);
+        setupBalance(_from, _transferAmount);
+
+        setupAllowance(_from, _operator, _allowance);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, _to, _transferAmount);
+        assertTrue(weth.transferFrom(_from, _to, _transferAmount));
+        assertEq(weth.balanceOf(_to), _transferAmount);
+        if (_from != _to) assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.allowance(_from, _operator), _allowance - _transferAmount);
+    }
     function testCannotTransferInsufficientBalance(
         address _from,
         address _to,
@@ -335,6 +375,36 @@ contract YAM_WETH_Test is Test {
         vm.prank(_from);
         vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
         weth.transfer(_to, _transferAmount);
+    }
+
+    function testCannotTransferFromNoApproval(address _operator, address _from) public realAddr(_operator) not0(_from) {
+        setupBalance(_from, 1e18);
+
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        weth.transferFrom(_from, _operator, 1);
+    }
+
+    function testCannotTransferZeroFromZero(address _operator) public realAddr(_operator) {
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.transferFrom(address(0), _operator, 0);
+    }
+
+    function testCannotTransferFromInsufficientApproval(
+        address _operator,
+        address _from,
+        uint96 _startBal,
+        uint _allowance
+    ) public realAddr(_operator) not0(_from) {
+        vm.assume(_allowance < _startBal);
+        setupBalance(_from, _startBal);
+
+        setupAllowance(_from, _operator, _allowance);
+
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        weth.transferFrom(_from, _operator, _startBal);
     }
 
     function testApprove(address _owner, address _spender, uint _allowance) public realAddr(_owner) {
