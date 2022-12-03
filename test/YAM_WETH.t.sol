@@ -48,6 +48,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_privKey != 0 && _privKey <= MAX_PRIV_KEY);
         _;
     }
+
     function setUp() public {
         vm.chainId(1);
         weth = new YAM_WETH(permit2);
@@ -364,6 +365,7 @@ contract YAM_WETH_Test is Test {
         if (_from != _to) assertEq(weth.balanceOf(_from), 0);
         assertEq(weth.allowance(_from, _operator), _allowance - _transferAmount);
     }
+
     function testCannotTransferInsufficientBalance(
         address _from,
         address _to,
@@ -585,15 +587,6 @@ contract YAM_WETH_Test is Test {
         bytes32 actualPayload = getPermitHash(_owner, _spender, _allowance, _nonce, _deadline);
 
         assertEq(actualPayload, eip712Payload);
-    }
-
-    function calldata1() public {
-        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](3);
-        deposits[0] = YAM_WETH.Deposit(vm.addr(20), 1);
-        deposits[1] = YAM_WETH.Deposit(vm.addr(21), 2);
-        deposits[2] = YAM_WETH.Deposit(vm.addr(21), 3);
-        bytes memory data = abi.encodeCall(YAM_WETH.depositAmountsToMany, (deposits));
-        emit log_named_bytes("data", data);
     }
 
     function setupBalance(address _account, uint96 _balance) internal {
