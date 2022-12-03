@@ -22,6 +22,7 @@ contract YAM_WETH_Test is Test {
     modifier realAddr(address _addr) {
         vm.assume(_addr != address(0));
         vm.assume(_addr != address(weth));
+        vm.assume(_addr != permit2);
         _;
     }
 
@@ -283,7 +284,7 @@ contract YAM_WETH_Test is Test {
         address _operator,
         address _from,
         uint96 _amount
-    ) public realAddr(_operator) realAddr(_from) notEq(_operator, permit2) {
+    ) public realAddr(_operator) realAddr(_from) {
         setupBalance(_from, _amount);
         setupOperator(_from, _operator);
 
@@ -296,7 +297,7 @@ contract YAM_WETH_Test is Test {
         address _operator,
         address _to,
         uint96 _amount
-    ) public realAddr(_operator) not0(_to) notEq(_operator, permit2) {
+    ) public realAddr(_operator) not0(_to) {
         // ensure supply
         setupBalance(vm.addr(1), 100e18);
 
@@ -310,7 +311,7 @@ contract YAM_WETH_Test is Test {
         address _from,
         address _to,
         uint96 _transferAmount
-    ) public realAddr(_operator) realAddr(_from) not0(_to) notEq(_operator, permit2) {
+    ) public realAddr(_operator) realAddr(_from) not0(_to) {
         setupOperator(_from, _operator);
         setupBalance(_from, _transferAmount);
 
