@@ -36,8 +36,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     bytes32 internal constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
 
     address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
-    bytes32 private constant MALLEABILITY_THRESHOLD =
-        0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
 
     error InsufficientBalance();
     error InsufficientFreeBalance();
@@ -307,7 +305,8 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             pop(staticcall(gas(), EC_RECOVER_PRECOMPILE, 0x00, 0x80, 0x00, 0x20))
             let recoveredSigner := mload(0x00)
 
-            if or(gt(_s, MALLEABILITY_THRESHOLD), or(lt(returndatasize(), 0x20), sub(recoveredSigner, _owner))) {
+            if iszero(and(eq(returndatasize(), 0x20), eq(recoveredSigner, _owner))) {
+                // `revert InvalidSignature()`
                 mstore(0x00, 0x8baa579f)
                 revert(0x1c, 0x04)
             }
