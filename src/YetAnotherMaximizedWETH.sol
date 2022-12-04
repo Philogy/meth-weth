@@ -8,7 +8,8 @@ import {Multicallable} from "solady/utils/Multicallable.sol";
 /// available ETH that can be used is determine by the difference between the contract's balance and
 /// the total supply.
 contract YAM_WETH is IYAM_WETH, Multicallable {
-    // keccak256("YAM_WETH.totalSupply") - 1
+    /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
+    /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
     bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
 
     address public immutable PERMIT2;
@@ -74,6 +75,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
+    /// @return symbol The token's symbol "WETH"
     function symbol() external pure returns (string memory) {
         assembly {
             // "WETH"
@@ -110,6 +112,10 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
+    /// @notice Similar to `approve(_newOperator, type(uint).max)` except that `transferFrom` is
+    /// cheaper for the primary operator
+    /// @param _newOperator The address to become the primary operator of `msg.sender`.
+    /// @return Whether the call was successful, always `true`. Method only reverts upon out of gas
     function setPrimaryOperator(address _newOperator) external payable succeeds returns (bool) {
         assembly {
             let callerData := sload(caller())
