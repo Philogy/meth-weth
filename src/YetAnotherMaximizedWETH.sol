@@ -39,6 +39,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
 
     address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
 
+    //
     bytes32 internal constant FLASHLOAN_MINT_MAGIC = 0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9;
 
     uint internal constant ONE_AS_BPS = 10000; // 100% in basis points (0.01%)
@@ -340,7 +341,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
             mstore(0x60, _amount)
             log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, caller())
 
-            // Trigger callback.
+            // Trigger `onFlashLoan(address,address,uint,uint,bytes)` callback.
             mstore(0x00, 0x23e30c8b)
             mstore(0x20, caller())
             mstore(0x40, address())
@@ -349,9 +350,16 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
             mstore(0xa0, 0xa0)
             mstore(0xc0, _data.length)
             calldatacopy(0xe0, _data.offset, _data.length)
-
             let success := call(gas(), caller(), 0, 0x1c, add(0xc4, _data.offset), 0x80, 0x20)
-            if iszero(and(success, eq(mload(0x80), FLASHLOAN_MINT_MAGIC))) {
+            if iszero(success) {
+                returndatacopy(0x00, 0x00, returndatasize())
+                return(0x00, returndatasize())
+            }
+
+            // Perform return check.
+            // `FLASHLOAN_MINT_MAGIC` has no leading zeros so `returndatasize() >= 32` check not
+            // necessary.
+            if iszero(eq(mload(0x80), FLASHLOAN_MINT_MAGIC)) {
                 // `revert FlashCallbackFailed()`
                 mstore(0x00, 0x207df21c)
                 mstore(0x1c, 0x04)
@@ -365,7 +373,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
                 revert(0x1c, 0x04)
             }
             sstore(caller(), sub(callerData, _amount))
-            sstore(TOTAL_SUPPLY_SLOT, sub(TOTAL_SUPPLY_SLOT, _amount))
+            sstore(TOTAL_SUPPLY_SLOT, sub(sload(TOTAL_SUPPLY_SLOT), _amount))
             log3(0x60, 0x20, TRANSFER_EVENT_SIG, caller(), 0)
         }
     }
