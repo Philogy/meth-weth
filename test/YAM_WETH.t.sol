@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {YAM_WETH} from "../src/YetAnotherMaximizedWETH.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {Reverter} from "./mocks/Reverter.sol";
+import {IERC3156FlashBorrower} from "../src/flashloan/IERC3156FlashBorrower.sol";
 
 contract YAM_WETH_Test is Test {
     using LibString for address;
@@ -857,9 +858,65 @@ contract YAM_WETH_Test is Test {
     }
 
     function setupBalance(address _account, uint96 _balance) internal {
+        uint balBefore = _account.balance;
         vm.deal(_account, _balance);
         vm.prank(_account);
         weth.deposit{value: _balance}();
+        vm.deal(_account, balBefore);
+    }
+
+    function testNoFlashFee(uint _borrowAmount) public {
+        assertEq(weth.flashFee(address(weth), _borrowAmount), 0);
+    }
+
+    function testCannotFlashNonWETH(address _token, uint _borrowAmount) public {
+        vm.assume(_token != address(weth));
+        vm.expectRevert(YAM_WETH.InvalidFlashParams.selector);
+        weth.flashFee(_token, _borrowAmount);
+        vm.expectRevert(YAM_WETH.InvalidFlashParams.selector);
+        weth.maxFlashLoan(_token);
+    }
+
+    function testSupplyCapMultiple(uint96 _wethBal) public {
+        vm.deal(address(weth), _wethBal);
+        if (_wethBal >= 100_000 ether) {
+            assertEq(weth.getSupplyCapMultiple(), 1.50e4);
+        } else if (_wethBal >= 10_000 ether) {
+            assertEq(weth.getSupplyCapMultiple(), 1.25e4);
+        } else if (_wethBal >= 1_000 ether) {
+            assertEq(weth.getSupplyCapMultiple(), 1.10e4);
+        } else if (_wethBal >= 500 ether) {
+            assertEq(weth.getSupplyCapMultiple(), 1.05e4);
+        } else if (_wethBal >= 100 ether) {
+            assertEq(weth.getSupplyCapMultiple(), 1.01e4);
+        } else {
+            assertEq(weth.getSupplyCapMultiple(), 1.00e4);
+        }
+    }
+
+    function testMaxFlashLoan(uint96 _wethBal, uint96 _totalSupply) public {
+        uint wethBal = uint(_wethBal);
+        vm.assume(wethBal >= _totalSupply);
+        setupBalance(globUser, _totalSupply);
+        vm.deal(address(weth), wethBal);
+
+        uint expectedLoan;
+        if (wethBal >= 100_000 ether) {
+            expectedLoan = (wethBal * 1.50e4) / 1e4;
+        } else if (wethBal >= 10_000 ether) {
+            expectedLoan = (wethBal * 1.25e4) / 1e4;
+        } else if (wethBal >= 1_000 ether) {
+            expectedLoan = (wethBal * 1.10e4) / 1e4;
+        } else if (wethBal >= 500 ether) {
+            expectedLoan = (wethBal * 1.05e4) / 1e4;
+        } else if (wethBal >= 100 ether) {
+            expectedLoan = (wethBal * 1.01e4) / 1e4;
+        } else {
+            expectedLoan = wethBal;
+        }
+        if (expectedLoan > type(uint96).max) expectedLoan = type(uint96).max;
+        expectedLoan -= _totalSupply;
+        assertEq(weth.maxFlashLoan(address(weth)), expectedLoan);
     }
 
     function setupOperator(address _account, address _operator) internal {

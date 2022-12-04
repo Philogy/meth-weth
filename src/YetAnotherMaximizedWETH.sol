@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.15;
 
-import {IYAM_WETH} from "./IYAM_WETH.sol";
 import {Multicallable} from "solady/utils/Multicallable.sol";
+import {IYAM_WETH} from "./IYAM_WETH.sol";
+import {IERC3156FlashLender} from "./flashloan/IERC3156FlashLender.sol";
 
 /// @dev To ensure safety with multicall use of `msg.value` (`callvalue()`) is avoided, instead the
 /// available ETH that can be used is determine by the difference between the contract's balance and
 /// the total supply.
-contract YAM_WETH is IYAM_WETH, Multicallable {
+contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
     /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
     /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
     bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
@@ -38,6 +39,10 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
 
+    bytes32 internal constant FLASHLOAN_MINT_MAGIC = 0x439148f0bbc682ca079e46d6e2c2f0c1e3b820f1a291b069d8882abf8cf18dd9;
+
+    uint internal constant ONE_AS_BPS = 10000; // 100% in basis points (0.01%)
+
     error InsufficientBalance();
     error InsufficientFreeBalance();
     error InsufficientPermission();
@@ -45,6 +50,8 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     error TotalSupplyOverflow();
     error PermitExpired();
     error InvalidSignature();
+    error InvalidFlashParams();
+    error FlashCallbackFailed();
 
     modifier succeeds() {
         _;
@@ -312,6 +319,57 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
+    function flashLoan(
+        address _receiver,
+        address _token,
+        uint _amount,
+        bytes calldata _data
+    ) external succeeds returns (bool) {
+        uint prevTotalSupply = _getTotalSupply();
+        uint maxLoan = _getMaxLoan(prevTotalSupply);
+        assembly {
+            // Basic check.
+            if iszero(and(eq(_receiver, caller()), and(eq(_token, address()), iszero(gt(_amount, maxLoan))))) {
+                // `revert InvalidFlashParams()`
+                mstore(0x00, 0x331eb0f0)
+                revert(0x1c, 0x04)
+            }
+            // Mint tokens to flash mint receiver.
+            sstore(TOTAL_SUPPLY_SLOT, add(prevTotalSupply, _amount))
+            sstore(caller(), add(sload(caller()), _amount))
+            mstore(0x60, _amount)
+            log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, caller())
+
+            // Trigger callback.
+            mstore(0x00, 0x23e30c8b)
+            mstore(0x20, caller())
+            mstore(0x40, address())
+            // `mstore(0x60, _amount)` already executed
+            mstore(0x80, 0x00)
+            mstore(0xa0, 0xa0)
+            mstore(0xc0, _data.length)
+            calldatacopy(0xe0, _data.offset, _data.length)
+
+            let success := call(gas(), caller(), 0, 0x1c, add(0xc4, _data.offset), 0x80, 0x20)
+            if iszero(and(success, eq(mload(0x80), FLASHLOAN_MINT_MAGIC))) {
+                // `revert FlashCallbackFailed()`
+                mstore(0x00, 0x207df21c)
+                mstore(0x1c, 0x04)
+            }
+
+            // Burn minted tokens.
+            let callerData := sload(caller())
+            if gt(_amount, and(callerData, BALANCE_MASK)) {
+                // `revert InsufficientBalance()`
+                mstore(0x00, 0xf4d678b8)
+                revert(0x1c, 0x04)
+            }
+            sstore(caller(), sub(callerData, _amount))
+            sstore(TOTAL_SUPPLY_SLOT, sub(TOTAL_SUPPLY_SLOT, _amount))
+            log3(0x60, 0x20, TRANSFER_EVENT_SIG, caller(), 0)
+        }
+    }
+
     function balanceOf(address _account) external view returns (uint) {
         assembly {
             let bal := and(sload(_account), BALANCE_MASK)
@@ -356,6 +414,32 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
+    function maxFlashLoan(address _token) external view returns (uint) {
+        assembly {
+            if iszero(eq(_token, address())) {
+                // `revert InvalidFlashParams()`
+                mstore(0x00, 0x331eb0f0)
+                revert(0x1c, 0x04)
+            }
+        }
+        return _getMaxLoan(_getTotalSupply());
+    }
+
+    function getSupplyCapMultiple() external view returns (uint) {
+        return _getSupplyCapMultiple();
+    }
+
+    function flashFee(address _token, uint) external view returns (uint) {
+        assembly {
+            if iszero(eq(_token, address())) {
+                // `revert InvalidFlashParams()`
+                mstore(0x00, 0x331eb0f0)
+                revert(0x1c, 0x04)
+            }
+            return(0x60, 0x20)
+        }
+    }
+
     function _depositAllTo(address _to) internal {
         assembly {
             if iszero(_to) {
@@ -369,6 +453,11 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             if gt(selfbalance(), BALANCE_MASK) {
                 // `revert TotalSupplyOverflow()`
                 mstore(0x00, 0xe5cfe957)
+                revert(0x1c, 0x04)
+            }
+            if gt(prevTotalSupply, selfbalance()) {
+                // `revert InsufficientFreeBalance()`
+                mstore(0x00, 0xa3bf9d5b)
                 revert(0x1c, 0x04)
             }
             sstore(TOTAL_SUPPLY_SLOT, selfbalance())
@@ -469,6 +558,41 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             mstore(add(freeMem, 0x60), chainid())
             mstore(add(freeMem, 0x80), address())
             domainSeparator := keccak256(freeMem, 0xa0)
+        }
+    }
+
+    function _getTotalSupply() internal view returns (uint totalSupplyLocal) {
+        assembly {
+            totalSupplyLocal := sload(TOTAL_SUPPLY_SLOT)
+        }
+    }
+
+    function _getSupplyCapMultiple() internal view returns (uint virtualSupplyCapMultiple) {
+        assembly {
+            virtualSupplyCapMultiple := add(
+                add(ONE_AS_BPS, mul(gt(selfbalance(), 99999999999999999999), 100)),
+                add(
+                    add(
+                        mul(gt(selfbalance(), 499999999999999999999), 400),
+                        mul(gt(selfbalance(), 999999999999999999999), 500)
+                    ),
+                    add(
+                        mul(gt(selfbalance(), 9999999999999999999999), 1500),
+                        mul(gt(selfbalance(), 99999999999999999999999), 2500)
+                    )
+                )
+            )
+        }
+    }
+
+    function _getMaxLoan(uint _totalSupply) internal view returns (uint maxLoan) {
+        uint virtualSupplyCapMultiple = _getSupplyCapMultiple();
+        assembly {
+            let virtualSupplyCap := div(mul(selfbalance(), virtualSupplyCapMultiple), ONE_AS_BPS)
+            if gt(virtualSupplyCap, BALANCE_MASK) {
+                virtualSupplyCap := BALANCE_MASK
+            }
+            maxLoan := mul(iszero(lt(virtualSupplyCap, _totalSupply)), sub(virtualSupplyCap, _totalSupply))
         }
     }
 }
