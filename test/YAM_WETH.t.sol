@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {YAM_WETH} from "../src/YetAnotherMaximizedWETH.sol";
 import {LibString} from "solady/utils/LibString.sol";
+import {Reverter} from "./mocks/Reverter.sol";
 
 contract YAM_WETH_Test is Test {
     using LibString for address;
@@ -14,6 +15,7 @@ contract YAM_WETH_Test is Test {
     YAM_WETH weth;
 
     address permit2 = vm.addr(0x929829);
+    address globUser = vm.addr(0xacacacacacacacacacacacacacacacac);
 
     event Transfer(address indexed from, address indexed to, uint amount);
     event Approval(address indexed owner, address indexed spender, uint amount);
@@ -51,9 +53,27 @@ contract YAM_WETH_Test is Test {
         _;
     }
 
+    modifier assertETHIncrease(address _account, uint _increase) {
+        uint balBefore = _account.balance;
+        _;
+        assertEq(_account.balance, balBefore + _increase);
+    }
+
+    modifier assertETHDecrease(address _account, uint _decrease) {
+        uint balBefore = _account.balance;
+        _;
+        assertEq(_account.balance, balBefore - _decrease);
+    }
+
     function setUp() public {
         vm.chainId(1);
         weth = new YAM_WETH(permit2);
+        vm.label(address(weth), "WETH");
+        vm.label(permit2, "Permit2");
+    }
+
+    function testDecimals() public {
+        assertEq(weth.decimals(), 18);
     }
 
     function testName() public {
@@ -115,7 +135,11 @@ contract YAM_WETH_Test is Test {
         weth.depositTo{value: _amount}(address(0));
     }
 
-    function testDepositAmount(address _account, uint96 _value, uint96 _depositAmount) public realAddr(_account) {
+    function testDepositAmount(
+        address _account,
+        uint96 _value,
+        uint96 _depositAmount
+    ) public realAddr(_account) assertETHIncrease(address(weth), _value) {
         vm.assume(_value >= _depositAmount);
         vm.deal(_account, _value);
         vm.prank(_account);
@@ -123,7 +147,6 @@ contract YAM_WETH_Test is Test {
         emit Transfer(address(0), _account, _depositAmount);
         assertTrue(weth.depositAmount{value: _value}(_depositAmount));
         assertEq(weth.balanceOf(_account), _depositAmount);
-        assertEq(address(weth).balance, _value);
         assertEq(weth.totalSupply(), _depositAmount);
     }
 
@@ -132,7 +155,7 @@ contract YAM_WETH_Test is Test {
         address _to,
         uint96 _value,
         uint96 _depositAmount
-    ) public realAddr(_from) not0(_to) {
+    ) public realAddr(_from) not0(_to) assertETHIncrease(address(weth), _value) {
         vm.assume(_value >= _depositAmount);
         vm.deal(_from, _value);
         vm.prank(_from);
@@ -141,8 +164,27 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.depositAmountTo{value: _value}(_to, _depositAmount));
         assertEq(weth.balanceOf(_to), _depositAmount);
         if (_from != _to) assertEq(weth.balanceOf(_from), 0);
-        assertEq(address(weth).balance, _value);
         assertEq(weth.totalSupply(), _depositAmount);
+    }
+
+    function testCannotDepositAmountToZero(address _from, uint96 _initialBal) public realAddr(_from) {
+        vm.deal(_from, _initialBal);
+        vm.prank(_from);
+        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        weth.depositAmountTo{value: _initialBal}(address(0), _initialBal);
+    }
+
+    function testDepositAmountToSupplyChecks(address _from, address _to) public realAddr(_from) realAddr(_to) {
+        vm.prank(_from);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositAmountTo(_to, 1 << 96);
+
+        setupBalance(_to, 1 wei);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositAmountTo(_to, type(uint).max);
+
+        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
+        weth.depositAmountTo{value: 0 wei}(_to, 1 wei);
     }
 
     function testDepositAmountsTo() public {
@@ -234,20 +276,72 @@ contract YAM_WETH_Test is Test {
         weth.depositAmountsToMany(deposits);
     }
 
+    function testDepositMany() public {
+        address[] memory recipients = new address[](4);
+        for (uint i = 0; i < recipients.length; i++) {
+            recipients[i] = vm.addr(i + 1);
+        }
+        uint amount = 5.423 ether;
+        address depositor = vm.addr(0xffff);
+        uint total = amount * recipients.length;
+        vm.deal(depositor, total);
+
+        vm.prank(depositor);
+        for (uint i = recipients.length; i > 0; i--) {
+            vm.expectEmit(true, true, true, true);
+            emit Transfer(address(0), recipients[i - 1], amount);
+        }
+        weth.depositToMany{value: total}(recipients, amount);
+        assertEq(weth.totalSupply(), total);
+        for (uint i = 0; i < recipients.length; i++) {
+            assertEq(weth.balanceOf(recipients[i]), amount);
+        }
+    }
+
+    function testCannotDepositManyTotalOverflow() public {
+        address[] memory recipients = new address[](4);
+        for (uint i = 0; i < recipients.length; i++) {
+            recipients[i] = vm.addr(i + 1);
+        }
+        uint amount = 1 << 254;
+        vm.expectRevert(bytes(""));
+        weth.depositToMany(recipients, amount);
+    }
+
+    function testCannotDepositMany96Overflow() public {
+        address[] memory recipients = new address[](1);
+        recipients[0] = vm.addr(1);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositToMany(recipients, 1 << 96);
+    }
+
+    function testCannotDepositManySupplyOverflow() public {
+        setupBalance(vm.addr(1), 1 wei);
+        address[] memory recipients = new address[](1);
+        recipients[0] = vm.addr(1);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositToMany(recipients, type(uint).max);
+    }
+
+    function testCannotDepositManyInsufficientFreeBalance() public {
+        address[] memory recipients = new address[](1);
+        recipients[0] = vm.addr(1);
+        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
+        weth.depositToMany(recipients, 1 wei);
+    }
+
     function testWithdraw(
         address _account,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public realAddr(_account) acceptsETH(_account) {
+    ) public realAddr(_account) acceptsETH(_account) assertETHIncrease(_account, _withdrawAmount) {
         vm.assume(_initialWethBalance >= _withdrawAmount);
         setupBalance(_account, _initialWethBalance);
-        uint balBefore = _account.balance;
         vm.prank(_account);
         vm.expectEmit(true, true, true, true);
         emit Transfer(_account, address(0), _withdrawAmount);
         assertTrue(weth.withdraw(_withdrawAmount));
         assertEq(weth.balanceOf(_account), _initialWethBalance - _withdrawAmount);
-        assertEq(_account.balance, balBefore + _withdrawAmount);
     }
 
     function testWithdrawTo(
@@ -255,12 +349,9 @@ contract YAM_WETH_Test is Test {
         address _to,
         uint96 _initialWethBalance,
         uint96 _withdrawAmount
-    ) public not0(_from) realAddr(_to) acceptsETH(_to) {
+    ) public realAddr(_from) realAddr(_to) acceptsETH(_to) assertETHIncrease(_to, _withdrawAmount) {
         vm.assume(_initialWethBalance >= _withdrawAmount);
         setupBalance(_from, _initialWethBalance);
-
-        uint wethBalBefore = address(weth).balance;
-        uint toBalBefore = _to.balance;
 
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
@@ -268,8 +359,133 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.withdrawTo(_to, _withdrawAmount));
 
         assertEq(weth.balanceOf(_from), _initialWethBalance - _withdrawAmount);
-        assertEq(_to.balance, toBalBefore + _withdrawAmount);
-        assertEq(address(weth).balance, wethBalBefore - _withdrawAmount);
+        assertEq(address(weth).balance, _initialWethBalance - _withdrawAmount);
+    }
+
+    function testWithdrawFromAsOperator(
+        address _operator,
+        address _from,
+        uint96 _amount
+    ) public realAddr(_operator) realAddr(_from) acceptsETH(_operator) assertETHIncrease(_operator, _amount) {
+        setupOperator(_from, _operator);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFrom(_from, _amount));
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.primaryOperatorOf(_from), _operator);
+    }
+
+    function testWithdrawFromInfiniteApproval(
+        address _operator,
+        address _from,
+        uint96 _amount
+    ) public realAddr(_operator) realAddr(_from) acceptsETH(_operator) assertETHIncrease(_operator, _amount) {
+        setupAllowance(_from, _operator, type(uint).max);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFrom(_from, _amount));
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.allowance(_from, _operator), type(uint).max);
+    }
+
+    function testWithdrawFromWithFiniteApproval(
+        address _operator,
+        address _from,
+        uint96 _amount,
+        uint _allowance
+    ) public realAddr(_operator) realAddr(_from) acceptsETH(_operator) assertETHIncrease(_operator, _amount) {
+        vm.assume(_allowance >= _amount && _allowance != type(uint).max);
+        setupAllowance(_from, _operator, _allowance);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFrom(_from, _amount));
+        assertEq(address(weth).balance, 0);
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.allowance(_from, _operator), _allowance - _amount);
+    }
+
+    function testCannotWithdrawFromWithoutApproval(
+        address _operator,
+        address _from,
+        uint96 _amount
+    ) public realAddr(_operator) realAddr(_from) notEq(_operator, _from) {
+        vm.assume(_amount > 1 wei);
+        setupBalance(_from, _amount);
+        vm.prank(_operator);
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        weth.withdrawFrom(_from, 1 wei);
+    }
+
+    function testWithdrawFromToAsOperator(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _amount
+    ) public realAddr(_operator) realAddr(_from) realAddr(_to) acceptsETH(_to) assertETHIncrease(_to, _amount) {
+        setupOperator(_from, _operator);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFromTo(_from, _to, _amount));
+        assertEq(address(weth).balance, 0);
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.primaryOperatorOf(_from), _operator);
+    }
+
+    function testWithdrawFromToInfiniteApproval(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _amount
+    ) public realAddr(_operator) realAddr(_from) realAddr(_to) acceptsETH(_to) assertETHIncrease(_to, _amount) {
+        setupAllowance(_from, _operator, type(uint).max);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFromTo(_from, _to, _amount));
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.allowance(_from, _operator), type(uint).max);
+    }
+
+    function testWithdrawFromToWithFiniteApproval(
+        address _operator,
+        address _from,
+        address _to,
+        uint96 _amount,
+        uint _allowance
+    ) public realAddr(_operator) realAddr(_from) realAddr(_to) acceptsETH(_to) assertETHIncrease(_to, _amount) {
+        vm.assume(_allowance >= _amount && _allowance != type(uint).max);
+        setupAllowance(_from, _operator, _allowance);
+        setupBalance(_from, _amount);
+
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, address(0), _amount);
+        assertTrue(weth.withdrawFromTo(_from, _to, _amount));
+        assertEq(address(weth).balance, 0);
+        assertEq(weth.balanceOf(_from), 0);
+        assertEq(weth.totalSupply(), 0);
+        assertEq(weth.allowance(_from, _operator), _allowance - _amount);
     }
 
     function testCannotWithdrawInsufficientBalance(
@@ -321,7 +537,7 @@ contract YAM_WETH_Test is Test {
         uint96 _fromStartBal,
         uint96 _toStartBal,
         uint96 _transferAmount
-    ) public realAddr(_from) not0(_to) {
+    ) public realAddr(_from) realAddr(_to) {
         vm.assume(_transferAmount <= _fromStartBal);
         vm.assume(uint(_fromStartBal) + uint(_toStartBal) <= type(uint96).max);
         setupBalance(_from, _fromStartBal);
@@ -538,6 +754,22 @@ contract YAM_WETH_Test is Test {
         assertEq(actualDomainSeparator, weth.DOMAIN_SEPARATOR(), "actual domain separator");
     }
 
+    function testDomainSeparatorAfterFork(uint64 _chainId) public {
+        vm.chainId(_chainId);
+        assertEq(
+            keccak256(
+                abi.encode(
+                    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                    keccak256(bytes(weth.name())),
+                    keccak256(bytes(weth.version())),
+                    _chainId,
+                    address(weth)
+                )
+            ),
+            weth.DOMAIN_SEPARATOR()
+        );
+    }
+
     function testGetNonce(address _account, uint _nonce) external not0(_account) {
         setupNonce(_account, _nonce);
         assertEq(weth.nonces(_account), _nonce);
@@ -650,6 +882,15 @@ contract YAM_WETH_Test is Test {
         bytes32 actualPayload = getPermitHash(_owner, _spender, _allowance, _nonce, _deadline);
 
         assertEq(actualPayload, eip712Payload);
+    }
+
+    function testRevertingRecipientErrorBubblesUp(uint96 _amount, bytes memory _revertdata) public {
+        Reverter r = new Reverter(_revertdata);
+        address user = vm.addr(1);
+        setupBalance(user, _amount);
+        vm.prank(user);
+        vm.expectRevert(_revertdata);
+        weth.withdrawTo(address(r), _amount);
     }
 
     function setupBalance(address _account, uint96 _balance) internal {

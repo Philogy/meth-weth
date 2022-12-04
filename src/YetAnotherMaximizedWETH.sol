@@ -146,11 +146,22 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function depositToMany(address[] calldata _recipients, uint _amount) external payable succeeds returns (bool) {
         assembly {
-            let recipientOffset := add(_recipients.offset, 0x04)
-            let totalRecipients := calldataload(recipientOffset)
+            let recipientOffset := _recipients.offset
+            let totalRecipients := _recipients.length
             let totalAmount := mul(totalRecipients, _amount)
+
             // `totalAmount` overflow check
-            if iszero(eq(div(totalAmount, _amount), totalRecipients)) {
+            let hasErrors := iszero(eq(div(totalAmount, _amount), totalRecipients))
+            mstore(0x00, _amount)
+            // prettier-ignore
+            for { let pos := shl(5, totalRecipients) } pos {} {
+                pos := sub(pos, 0x20)
+                let recipient := calldataload(add(recipientOffset, pos))
+                hasErrors := or(hasErrors, or(iszero(recipient), sub(recipient, and(recipient, ADDR_MASK))))
+                sstore(recipient, add(sload(recipient), _amount))
+                log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
+            }
+            if hasErrors {
                 revert(0x00, 0x00)
             }
 
@@ -168,19 +179,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 revert(0x1c, 0x04)
             }
             sstore(TOTAL_SUPPLY_SLOT, newTotalSupply)
-
-            mstore(0x00, _amount)
-            let hasErrors := 0
-            // prettier-ignore
-            for { let i := totalRecipients } i { i := sub(i, 1) } {
-                let recipient := calldataload(add(recipientOffset, shl(5, i)))
-                hasErrors := or(hasErrors, or(iszero(recipient), sub(recipient, and(recipient, ADDR_MASK))))
-                sstore(recipient, add(sload(recipient), _amount))
-                log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
-            }
-            if hasErrors {
-                revert(0x00, 0x00)
-            }
         }
     }
 
@@ -486,10 +484,9 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             mstore(0x00, _amount)
             log3(0x00, 0x20, TRANSFER_EVENT_SIG, _from, 0)
 
-            let success := call(gas(), _to, _amount, 0x00, 0x00, 0x00, 0x00)
-            if iszero(success) {
+            if iszero(call(gas(), _to, _amount, 0x00, 0x00, 0x00, 0x00)) {
                 returndatacopy(0x00, 0x00, returndatasize())
-                return(0x00, returndatasize())
+                revert(0x00, returndatasize())
             }
         }
     }
