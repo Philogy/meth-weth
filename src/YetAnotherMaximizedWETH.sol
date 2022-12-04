@@ -75,9 +75,8 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
     function name() external pure returns (string memory) {
         assembly {
             // "Yet Another Maximized Wrapped Ether Contract" (len: 44)
-            mstore(0x4c, 0x68657220436f6e7472616374)
-            mstore(0x40, 0x59657420416e6f74686572204d6178696d697a65642057726170706564204574)
-            mstore(0x20, 0x2c)
+            mstore(0x4c, 0x7468657220436f6e7472616374)
+            mstore(0x3f, 0x2c59657420416e6f74686572204d6178696d697a656420577261707065642045)
             mstore(0x00, 0x20)
             return(0x00, 0x80)
         }
@@ -87,8 +86,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
     function symbol() external pure returns (string memory) {
         assembly {
             // "WETH"
-            mstore(0x24, 0x57455448)
-            mstore(0x20, 0x04)
+            mstore(0x24, 0x0457455448)
             mstore(0x00, 0x20)
             return(0x00, 0x60)
         }
