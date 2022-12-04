@@ -136,14 +136,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         _depositAllTo(_recipient);
     }
 
-    function depositAmount(uint _amount) external payable succeeds returns (bool) {
-        _depositAmountTo(msg.sender, _amount);
-    }
-
-    function depositAmountTo(address _recipient, uint _amount) external payable succeeds returns (bool) {
-        _depositAmountTo(_recipient, _amount);
-    }
-
     function depositToMany(address[] calldata _recipients, uint _amount) external payable succeeds returns (bool) {
         assembly {
             let recipientOffset := _recipients.offset
@@ -376,35 +368,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             sstore(TOTAL_SUPPLY_SLOT, selfbalance())
             sstore(_to, add(sload(_to), depositAmount))
             mstore(0x00, depositAmount)
-            log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, _to)
-        }
-    }
-
-    function _depositAmountTo(address _to, uint _amount) internal {
-        assembly {
-            if iszero(_to) {
-                // `revert ZeroAddress()`
-                mstore(0x00, 0xd92e233d)
-                revert(0x1c, 0x04)
-            }
-
-            // No amount check because amount is explicit
-            let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
-            let newTotalSupply := add(prevTotalSupply, _amount)
-            if or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)) {
-                // `revert TotalSupplyOverflow()`
-                mstore(0x00, 0xe5cfe957)
-                revert(0x1c, 0x04)
-            }
-            if gt(newTotalSupply, selfbalance()) {
-                // `revert InsufficientFreeBalance()`
-                mstore(0x00, 0xa3bf9d5b)
-                revert(0x1c, 0x04)
-            }
-
-            sstore(TOTAL_SUPPLY_SLOT, newTotalSupply)
-            sstore(_to, add(sload(_to), _amount))
-            mstore(0x00, _amount)
             log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, _to)
         }
     }

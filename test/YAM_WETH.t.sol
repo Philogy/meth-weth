@@ -135,56 +135,19 @@ contract YAM_WETH_Test is Test {
         weth.depositTo{value: _amount}(address(0));
     }
 
-    function testDepositAmount(
-        address _account,
-        uint96 _value,
-        uint96 _depositAmount
-    ) public realAddr(_account) assertETHIncrease(address(weth), _value) {
-        vm.assume(_value >= _depositAmount);
-        vm.deal(_account, _value);
-        vm.prank(_account);
-        vm.expectEmit(true, true, true, true);
-        emit Transfer(address(0), _account, _depositAmount);
-        assertTrue(weth.depositAmount{value: _value}(_depositAmount));
-        assertEq(weth.balanceOf(_account), _depositAmount);
-        assertEq(weth.totalSupply(), _depositAmount);
+    function testPermit2HasNoExplicitApproval(address _account) public realAddr(_account) {
+        assertEq(weth.primaryOperatorOf(_account), address(0));
+        assertEq(weth.allowance(_account, permit2), 0);
     }
 
-    function testDepositAmountTo(
-        address _from,
-        address _to,
-        uint96 _value,
-        uint96 _depositAmount
-    ) public realAddr(_from) not0(_to) assertETHIncrease(address(weth), _value) {
-        vm.assume(_value >= _depositAmount);
-        vm.deal(_from, _value);
-        vm.prank(_from);
+    function testPermit2TransferFrom(address _from, address _to, uint96 _amount) public realAddr(_from) realAddr(_to) {
+        setupBalance(_from, _amount);
+        vm.prank(permit2);
         vm.expectEmit(true, true, true, true);
-        emit Transfer(address(0), _to, _depositAmount);
-        assertTrue(weth.depositAmountTo{value: _value}(_to, _depositAmount));
-        assertEq(weth.balanceOf(_to), _depositAmount);
+        emit Transfer(_from, _to, _amount);
+        assertTrue(weth.transferFrom(_from, _to, _amount));
+        assertEq(weth.balanceOf(_to), _amount);
         if (_from != _to) assertEq(weth.balanceOf(_from), 0);
-        assertEq(weth.totalSupply(), _depositAmount);
-    }
-
-    function testCannotDepositAmountToZero(address _from, uint96 _initialBal) public realAddr(_from) {
-        vm.deal(_from, _initialBal);
-        vm.prank(_from);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
-        weth.depositAmountTo{value: _initialBal}(address(0), _initialBal);
-    }
-
-    function testDepositAmountToSupplyChecks(address _from, address _to) public realAddr(_from) realAddr(_to) {
-        vm.prank(_from);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
-        weth.depositAmountTo(_to, 1 << 96);
-
-        setupBalance(_to, 1 wei);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
-        weth.depositAmountTo(_to, type(uint).max);
-
-        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
-        weth.depositAmountTo{value: 0 wei}(_to, 1 wei);
     }
 
     function testDepositAmountsTo() public {
