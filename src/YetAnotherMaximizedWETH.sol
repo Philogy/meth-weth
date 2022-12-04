@@ -267,6 +267,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         bytes32 domainSeparator = DOMAIN_SEPARATOR();
         assembly {
             if gt(timestamp(), _deadline) {
+                // `revert PermitExpired()`
                 mstore(0x00, 0x1a15a3cc)
                 revert(0x1c, 0x04)
             }
