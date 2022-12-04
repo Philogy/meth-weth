@@ -6,6 +6,7 @@ import {YAM_WETH} from "../src/YetAnotherMaximizedWETH.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {Reverter} from "./mocks/Reverter.sol";
 import {IERC3156FlashBorrower} from "../src/flashloan/IERC3156FlashBorrower.sol";
+import {Borrower} from "./mocks/borrowers/Borrower.sol";
 
 contract YAM_WETH_Test is Test {
     using LibString for address;
@@ -917,6 +918,30 @@ contract YAM_WETH_Test is Test {
         if (expectedLoan > type(uint96).max) expectedLoan = type(uint96).max;
         expectedLoan -= _totalSupply;
         assertEq(weth.maxFlashLoan(address(weth)), expectedLoan);
+    }
+
+    function testFlashLoan(uint96 _totalSupply, uint _loanIn, bytes calldata _data) public {
+        setupBalance(globUser, _totalSupply);
+        Borrower borrower = new Borrower();
+        uint loanAmount = _loanIn % (weth.maxFlashLoan(address(weth)) + 1);
+        emit log_named_uint("loanAmount", loanAmount);
+        borrower.setupCheck(address(this), abi.encodeCall(this.checkWETHBalance, (address(borrower), loanAmount)));
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(0), address(borrower), loanAmount);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(address(borrower), address(0), loanAmount);
+        borrower.flashmint(address(weth), address(borrower), address(weth), loanAmount, _data);
+        assertEq(borrower.lastInitiator(), address(borrower));
+        assertEq(borrower.lastToken(), address(weth));
+        assertEq(borrower.lastAmount(), loanAmount);
+        assertEq(borrower.lastFee(), 0);
+        assertEq(borrower.lastData(), _data);
+        assertEq(weth.totalSupply(), _totalSupply);
+        assertEq(weth.balanceOf(address(borrower)), 0);
+    }
+
+    function checkWETHBalance(address _borrower, uint _expectedBal) public {
+        assertEq(weth.balanceOf(_borrower), _expectedBal);
     }
 
     function setupOperator(address _account, address _operator) internal {
