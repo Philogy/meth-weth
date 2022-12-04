@@ -40,6 +40,8 @@ contract YAM_WETH_Test is Test {
         if (_recipient != address(weth)) {
             (bool success, ) = _recipient.call{value: 1 wei}("");
             vm.assume(success);
+            vm.prank(_recipient);
+            payable(address(0)).transfer(1 wei);
         }
         _;
     }
@@ -169,6 +171,67 @@ contract YAM_WETH_Test is Test {
         assertTrue(weth.depositAmountsToMany{value: amount1 + amount2}(deposits));
         assertEq(weth.balanceOf(user1), baseBalance1 + amount1);
         assertEq(weth.balanceOf(user2), baseBalance2 + amount2);
+    }
+
+    function testCannotDepositAmountsToZero() public {
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](2);
+        uint amount1 = 32.5e18;
+        uint amount2 = 4.298e18;
+        deposits[0] = YAM_WETH.Deposit(address(0), amount1);
+        deposits[1] = YAM_WETH.Deposit(vm.addr(100), amount2);
+        address executor = vm.addr(0xffff);
+        vm.deal(executor, amount1 + amount2);
+        vm.prank(executor);
+        vm.expectRevert(bytes(""));
+        weth.depositAmountsToMany{value: amount1 + amount2}(deposits);
+    }
+
+    function testCannotDepositAmountsThatOverflow() public {
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](3);
+        uint amount1 = 32.5e18;
+        deposits[0] = YAM_WETH.Deposit(vm.addr(100), amount1);
+        deposits[1] = YAM_WETH.Deposit(vm.addr(200), type(uint).max);
+        deposits[2] = YAM_WETH.Deposit(vm.addr(300), 1);
+        address executor = vm.addr(0xffff);
+        vm.deal(executor, amount1);
+        vm.prank(executor);
+        vm.expectRevert(bytes(""));
+        weth.depositAmountsToMany{value: amount1}(deposits);
+    }
+
+    function testCannotDepositAmountsWithoutETH() public {
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](2);
+        uint amount1 = 32.5e18;
+        uint amount2 = 4.298e18;
+        deposits[0] = YAM_WETH.Deposit(vm.addr(100), amount1);
+        deposits[1] = YAM_WETH.Deposit(vm.addr(200), amount2);
+        address executor = vm.addr(0xffff);
+        vm.deal(executor, amount1 + amount2 - 1 wei);
+        vm.prank(executor);
+        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
+        weth.depositAmountsToMany{value: amount1 + amount2 - 1 wei}(deposits);
+    }
+
+    function testCannotExceedSupply96WithDepositAmounts() public {
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](2);
+        deposits[0] = YAM_WETH.Deposit(vm.addr(100), type(uint96).max);
+        deposits[1] = YAM_WETH.Deposit(vm.addr(200), 1);
+        address executor = vm.addr(0xffff);
+        uint total = uint(type(uint96).max) + 1;
+        vm.deal(executor, total);
+        vm.prank(executor);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositAmountsToMany{value: total}(deposits);
+    }
+
+    function testCannotOverflowSupplyWithDepositAmounts() public {
+        setupBalance(vm.addr(1), 1e18);
+        YAM_WETH.Deposit[] memory deposits = new YAM_WETH.Deposit[](1);
+        deposits[0] = YAM_WETH.Deposit(vm.addr(100), type(uint).max);
+        address executor = vm.addr(0xffff);
+        vm.prank(executor);
+        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        weth.depositAmountsToMany(deposits);
     }
 
     function testWithdraw(
