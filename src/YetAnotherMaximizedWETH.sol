@@ -328,16 +328,16 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
         uint maxLoan = _getMaxLoan(prevTotalSupply);
         assembly {
             // Basic check.
-            if iszero(and(eq(_receiver, caller()), and(eq(_token, address()), iszero(gt(_amount, maxLoan))))) {
+            if iszero(and(eq(_token, address()), iszero(gt(_amount, maxLoan)))) {
                 // `revert InvalidFlashParams()`
                 mstore(0x00, 0x331eb0f0)
                 revert(0x1c, 0x04)
             }
             // Mint tokens to flash mint receiver.
             sstore(TOTAL_SUPPLY_SLOT, add(prevTotalSupply, _amount))
-            sstore(caller(), add(sload(caller()), _amount))
+            sstore(caller(), add(sload(_receiver), _amount))
             mstore(0x60, _amount)
-            log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, caller())
+            log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, _receiver)
 
             // Trigger `onFlashLoan(address,address,uint,uint,bytes)` callback.
             mstore(0x00, 0x23e30c8b)
