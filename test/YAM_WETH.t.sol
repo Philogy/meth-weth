@@ -14,7 +14,6 @@ contract YAM_WETH_Test is Test {
         115792089237316195423570985008687907852837564279074904382605163141518161494336;
     YAM_WETH weth;
 
-    address permit2 = vm.addr(0x929829);
     address globUser = vm.addr(0xacacacacacacacacacacacacacacacac);
 
     event Transfer(address indexed from, address indexed to, uint amount);
@@ -24,7 +23,6 @@ contract YAM_WETH_Test is Test {
     modifier realAddr(address _addr) {
         vm.assume(_addr != address(0));
         vm.assume(_addr != address(weth));
-        vm.assume(_addr != permit2);
         _;
     }
 
@@ -67,9 +65,8 @@ contract YAM_WETH_Test is Test {
 
     function setUp() public {
         vm.chainId(1);
-        weth = new YAM_WETH(permit2);
+        weth = new YAM_WETH();
         vm.label(address(weth), "WETH");
-        vm.label(permit2, "Permit2");
     }
 
     function testDecimals() public {
@@ -133,21 +130,6 @@ contract YAM_WETH_Test is Test {
         vm.prank(_from);
         vm.expectRevert(bytes(""));
         weth.depositTo{value: _amount}(address(0));
-    }
-
-    function testPermit2HasNoExplicitApproval(address _account) public realAddr(_account) {
-        assertEq(weth.primaryOperatorOf(_account), address(0));
-        assertEq(weth.allowance(_account, permit2), 0);
-    }
-
-    function testPermit2TransferFrom(address _from, address _to, uint96 _amount) public realAddr(_from) realAddr(_to) {
-        setupBalance(_from, _amount);
-        vm.prank(permit2);
-        vm.expectEmit(true, true, true, true);
-        emit Transfer(_from, _to, _amount);
-        assertTrue(weth.transferFrom(_from, _to, _amount));
-        assertEq(weth.balanceOf(_to), _amount);
-        if (_from != _to) assertEq(weth.balanceOf(_from), 0);
     }
 
     function testDepositAmountsTo() public {

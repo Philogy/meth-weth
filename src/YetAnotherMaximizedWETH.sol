@@ -12,8 +12,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
     bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
 
-    address public immutable PERMIT2;
-
     uint internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
     uint internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
@@ -46,8 +44,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         }
     }
 
-    constructor(address _permit2) {
-        PERMIT2 = _permit2;
+    constructor() {
         CACHED_DOMAIN_SEPARATOR = _computeDomainSeparator();
         CACHED_CHAINID = block.chainid;
     }
@@ -383,12 +380,11 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     }
 
     function _useAllowance(address _from, uint _amount) internal returns (bytes32 fromData) {
-        address permit2 = PERMIT2;
         assembly {
             fromData := sload(_from)
 
-            if iszero(or(eq(caller(), shr(96, fromData)), eq(caller(), permit2))) {
-                // Not primary operator or Permit2, check allowance
+            if iszero(eq(caller(), shr(96, fromData))) {
+                // Not primary operator, check allowance.
                 mstore(0x00, _from)
                 mstore(0x20, caller())
                 let allowanceSlot := keccak256(0x00, 0x40)

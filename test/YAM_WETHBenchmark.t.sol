@@ -9,7 +9,6 @@ import {IWETH9} from "./mocks/IWETH9.sol";
 contract YAM_WETHBenchmarkTest is Test {
     YAM_WETH internal immutable weth;
 
-    address internal immutable permit2 = vm.addr(0x929829);
     address internal immutable globUser1 = vm.addr(0xacacacacacacacacacacacacacacacac);
     address internal immutable globUser2 = vm.addr(0xbbbbacacacacacacacacacacacacacac);
 
@@ -24,7 +23,7 @@ contract YAM_WETHBenchmarkTest is Test {
     constructor() {
         vm.selectFork(vm.createFork(vm.envString("RPC_URL"), vm.envUint("FORK_BLOCK")));
 
-        weth = new YAM_WETH(permit2);
+        weth = new YAM_WETH();
         vm.deal(globUser1, 100_000 ether);
         vm.deal(globUser2, 300_000 ether);
         vm.prank(globUser2);
