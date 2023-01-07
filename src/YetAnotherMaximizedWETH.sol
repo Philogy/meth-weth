@@ -38,14 +38,6 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
 
-    error InsufficientBalance();
-    error InsufficientFreeBalance();
-    error InsufficientPermission();
-    error ZeroAddress();
-    error TotalSupplyOverflow();
-    error PermitExpired();
-    error InvalidSignature();
-
     modifier succeeds() {
         _;
         assembly {
