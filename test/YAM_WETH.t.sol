@@ -131,7 +131,7 @@ contract YAM_WETH_Test is Test {
     function testCannotDepositToZero(address _from, uint96 _amount) public realAddr(_from) {
         vm.deal(_from, _amount);
         vm.prank(_from);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        vm.expectRevert(bytes(""));
         weth.depositTo{value: _amount}(address(0));
     }
 
@@ -213,7 +213,7 @@ contract YAM_WETH_Test is Test {
         address executor = vm.addr(0xffff);
         vm.deal(executor, amount1 + amount2 - 1 wei);
         vm.prank(executor);
-        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
+        vm.expectRevert(bytes(""));
         weth.depositAmountsToMany{value: amount1 + amount2 - 1 wei}(deposits);
     }
 
@@ -225,7 +225,7 @@ contract YAM_WETH_Test is Test {
         uint total = uint(type(uint96).max) + 1;
         vm.deal(executor, total);
         vm.prank(executor);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        vm.expectRevert(bytes(""));
         weth.depositAmountsToMany{value: total}(deposits);
     }
 
@@ -235,7 +235,7 @@ contract YAM_WETH_Test is Test {
         deposits[0] = YAM_WETH.Deposit(vm.addr(100), type(uint).max);
         address executor = vm.addr(0xffff);
         vm.prank(executor);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        vm.expectRevert(bytes(""));
         weth.depositAmountsToMany(deposits);
     }
 
@@ -274,7 +274,7 @@ contract YAM_WETH_Test is Test {
     function testCannotDepositMany96Overflow() public {
         address[] memory recipients = new address[](1);
         recipients[0] = vm.addr(1);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        vm.expectRevert(bytes(""));
         weth.depositToMany(recipients, 1 << 96);
     }
 
@@ -282,14 +282,14 @@ contract YAM_WETH_Test is Test {
         setupBalance(vm.addr(1), 1 wei);
         address[] memory recipients = new address[](1);
         recipients[0] = vm.addr(1);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        vm.expectRevert(bytes(""));
         weth.depositToMany(recipients, type(uint).max);
     }
 
     function testCannotDepositManyInsufficientFreeBalance() public {
         address[] memory recipients = new address[](1);
         recipients[0] = vm.addr(1);
-        vm.expectRevert(YAM_WETH.InsufficientFreeBalance.selector);
+        vm.expectRevert(bytes(""));
         weth.depositToMany(recipients, 1 wei);
     }
 
@@ -389,7 +389,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_amount > 1 wei);
         setupBalance(_from, _amount);
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        vm.expectRevert(bytes(""));
         weth.withdrawFrom(_from, 1 wei);
     }
 
@@ -459,7 +459,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_initialWethBalance < _withdrawAmount);
         setupBalance(_account, _initialWethBalance);
         vm.prank(_account);
-        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
+        vm.expectRevert(bytes(""));
         weth.withdraw(_withdrawAmount);
     }
 
@@ -490,7 +490,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_amount > uint(type(uint96).max));
         vm.deal(_account, _amount);
         vm.prank(_account);
-        vm.expectRevert(YAM_WETH.TotalSupplyOverflow.selector);
+        vm.expectRevert(bytes(""));
         weth.deposit{value: _amount}();
     }
 
@@ -519,7 +519,7 @@ contract YAM_WETH_Test is Test {
     function testCannotTransferToZero(address _from, uint96 _amount) public realAddr(_from) {
         setupBalance(_from, _amount);
         vm.prank(_from);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        vm.expectRevert(bytes(""));
         weth.transfer(address(0), _amount);
     }
 
@@ -532,7 +532,7 @@ contract YAM_WETH_Test is Test {
         setupOperator(_from, _operator);
 
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        vm.expectRevert(bytes(""));
         weth.transferFrom(_from, address(0), _amount);
     }
 
@@ -545,7 +545,7 @@ contract YAM_WETH_Test is Test {
         setupBalance(vm.addr(1), 100e18);
 
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        vm.expectRevert(bytes(""));
         weth.transferFrom(address(0), _to, _amount);
     }
 
@@ -617,7 +617,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_fromStartBal < _transferAmount);
         setupBalance(_from, _fromStartBal);
         vm.prank(_from);
-        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
+        vm.expectRevert(bytes(""));
         weth.transfer(_to, _transferAmount);
     }
 
@@ -625,13 +625,13 @@ contract YAM_WETH_Test is Test {
         setupBalance(_from, 1e18);
 
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        vm.expectRevert(bytes(""));
         weth.transferFrom(_from, _operator, 1);
     }
 
     function testCannotTransferZeroFromZero(address _operator) public realAddr(_operator) {
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.ZeroAddress.selector);
+        vm.expectRevert(bytes(""));
         weth.transferFrom(address(0), _operator, 0);
     }
 
@@ -647,7 +647,7 @@ contract YAM_WETH_Test is Test {
         setupAllowance(_from, _operator, _allowance);
 
         vm.prank(_operator);
-        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
+        vm.expectRevert(bytes(""));
         weth.transferFrom(_from, _operator, _startBal);
     }
 
@@ -777,7 +777,7 @@ contract YAM_WETH_Test is Test {
             computePermitHash(owner, _spender, _allowance, _nonce, _deadline)
         );
 
-        vm.expectRevert(YAM_WETH.PermitExpired.selector);
+        vm.expectRevert(bytes(""));
         weth.permit(owner, _spender, _allowance, _deadline, v, r, s);
     }
 
@@ -794,7 +794,7 @@ contract YAM_WETH_Test is Test {
             ecrecover(computePermitHash(_owner, _spender, _allowance, _nonce, block.timestamp), _v, _r, _s) ==
                 address(0)
         );
-        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        vm.expectRevert(bytes(""));
         weth.permit(_owner, _spender, _allowance, block.timestamp, _v, _r, _s);
     }
 
@@ -811,7 +811,7 @@ contract YAM_WETH_Test is Test {
             _fakePrivKey,
             computePermitHash(_owner, _spender, _allowance, _nonce, block.timestamp)
         );
-        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        vm.expectRevert(bytes(""));
         weth.permit(_owner, _spender, _allowance, block.timestamp, v, r, s);
     }
 
@@ -830,7 +830,7 @@ contract YAM_WETH_Test is Test {
             computePermitHash(owner, _spender, _allowance, _nonce + 1, block.timestamp)
         );
 
-        vm.expectRevert(YAM_WETH.InvalidSignature.selector);
+        vm.expectRevert(bytes(""));
         weth.permit(owner, _spender, _allowance, block.timestamp, v, r, s);
     }
 

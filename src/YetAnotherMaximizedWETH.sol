@@ -159,23 +159,21 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 sstore(recipient, add(sload(recipient), _amount))
                 log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
             }
-            if hasErrors {
-                revert(0x00, 0x00)
-            }
 
             // totalSupply checks and updates
             let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
             let newTotalSupply := add(prevTotalSupply, totalAmount)
-            if or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)) {
-                // `revert TotalSupplyOverflow()`
-                mstore(0x00, 0xe5cfe957)
-                revert(0x1c, 0x04)
-            }
-            if gt(newTotalSupply, selfbalance()) {
-                // `revert InsufficientFreeBalance()`
-                mstore(0x00, 0xa3bf9d5b)
-                revert(0x1c, 0x04)
-            }
+
+            // Revert if error occured during deposits, if total supply overflowed or if there's not
+            // enough ETH.
+            returndatacopy(
+                returndatasize(),
+                returndatasize(),
+                or(
+                    or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)),
+                    or(gt(newTotalSupply, selfbalance()), hasErrors)
+                )
+            )
             sstore(TOTAL_SUPPLY_SLOT, newTotalSupply)
         }
     }
@@ -214,23 +212,21 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 mstore(0x00, amount)
                 log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
             }
-            if hasErrors {
-                revert(0x00, 0x00)
-            }
 
             // totalSupply checks and updates
             let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
             let newTotalSupply := add(prevTotalSupply, depositTotal)
-            if or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)) {
-                // `revert TotalSupplyOverflow()`
-                mstore(0x00, 0xe5cfe957)
-                revert(0x1c, 0x04)
-            }
-            if gt(newTotalSupply, selfbalance()) {
-                // `revert InsufficientFreeBalance()`
-                mstore(0x00, 0xa3bf9d5b)
-                revert(0x1c, 0x04)
-            }
+
+            // Revert if error occured during deposits, if total supply overflowed or if there's not
+            // enough ETH.
+            returndatacopy(
+                returndatasize(),
+                returndatasize(),
+                or(
+                    or(gt(newTotalSupply, BALANCE_MASK), lt(newTotalSupply, prevTotalSupply)),
+                    or(gt(newTotalSupply, selfbalance()), hasErrors)
+                )
+            )
             sstore(TOTAL_SUPPLY_SLOT, newTotalSupply)
         }
     }
@@ -262,11 +258,8 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     ) external payable {
         bytes32 domainSeparator = DOMAIN_SEPARATOR();
         assembly {
-            if gt(timestamp(), _deadline) {
-                // `revert PermitExpired()`
-                mstore(0x00, 0x1a15a3cc)
-                revert(0x1c, 0x04)
-            }
+            // Check deadline vs. timestamp.
+            returndatacopy(returndatasize(), returndatasize(), gt(timestamp(), _deadline))
 
             // Prepare main permit fields.
             mstore(0x00, PERMIT_TYPE_HASH)
@@ -302,11 +295,12 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             pop(staticcall(gas(), EC_RECOVER_PRECOMPILE, 0x00, 0x80, 0x00, 0x20))
             let recoveredSigner := mload(0x00)
 
-            if iszero(and(eq(returndatasize(), 0x20), eq(recoveredSigner, _owner))) {
-                // `revert InvalidSignature()`
-                mstore(0x00, 0x8baa579f)
-                revert(0x1c, 0x04)
-            }
+            // Check recovered owner.
+            returndatacopy(
+                returndatasize(),
+                returndatasize(),
+                or(sub(returndatasize(), 0x20), sub(recoveredSigner, _owner))
+            )
 
             stop()
         }
@@ -358,19 +352,13 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function _depositAllTo(address _to) internal {
         assembly {
-            if iszero(_to) {
-                // `revert ZeroAddress()`
-                mstore(0x00, 0xd92e233d)
-                revert(0x1c, 0x04)
-            }
-
             let prevTotalSupply := sload(TOTAL_SUPPLY_SLOT)
             let depositAmount := sub(selfbalance(), prevTotalSupply)
-            if gt(selfbalance(), BALANCE_MASK) {
-                // `revert TotalSupplyOverflow()`
-                mstore(0x00, 0xe5cfe957)
-                revert(0x1c, 0x04)
-            }
+
+            // Check if recipient is zero-address and if somehow total balance is above 2**96 - 1,
+            // would require 7.92B ETH. May be possible on other chains with higher balance.
+            returndatacopy(returndatasize(), returndatasize(), or(iszero(_to), gt(selfbalance(), BALANCE_MASK)))
+
             sstore(TOTAL_SUPPLY_SLOT, selfbalance())
             sstore(_to, add(sload(_to), depositAmount))
             mstore(0x00, depositAmount)
@@ -389,16 +377,12 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function _transfer(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
-            if iszero(_to) {
-                // `revert ZeroAddress()`
-                mstore(0x00, 0xd92e233d)
-                revert(0x1c, 0x04)
-            }
-            if gt(_amount, and(_fromData, BALANCE_MASK)) {
-                // `revert InsufficientBalance()`
-                mstore(0x00, 0xf4d678b8)
-                revert(0x1c, 0x04)
-            }
+            // Check for zero address and sufficient balance.
+            returndatacopy(
+                returndatasize(),
+                returndatasize(),
+                or(iszero(_to), gt(_amount, and(_fromData, BALANCE_MASK)))
+            )
             sstore(_from, sub(_fromData, _amount))
             sstore(_to, add(sload(_to), _amount))
             mstore(0x00, _amount)
@@ -418,17 +402,8 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 let allowanceSlot := keccak256(0x00, 0x40)
                 let senderAllowance := sload(allowanceSlot)
                 if iszero(eq(senderAllowance, not(0))) {
-                    if iszero(_from) {
-                        // `revert ZeroAddress()`
-                        mstore(0x00, 0xd92e233d)
-                        revert(0x1c, 0x04)
-                    }
-                    // No infinite approval
-                    if gt(_amount, senderAllowance) {
-                        // `revert InsufficientPermission()`
-                        mstore(0x00, 0xdeda9030)
-                        revert(0x1c, 0x04)
-                    }
+                    // Check allowance and that from address not zero.
+                    returndatacopy(returndatasize(), returndatasize(), or(iszero(_from), gt(_amount, senderAllowance)))
                     sstore(allowanceSlot, sub(senderAllowance, _amount))
                 }
             }
@@ -443,11 +418,9 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
-            if gt(_amount, and(_fromData, BALANCE_MASK)) {
-                // `revert InsufficientBalance()`
-                mstore(0x00, 0xf4d678b8)
-                revert(0x1c, 0x04)
-            }
+            // Check balance.
+            returndatacopy(returndatasize(), returndatasize(), gt(_amount, and(_fromData, BALANCE_MASK)))
+
             sstore(_from, sub(_fromData, _amount))
             sstore(TOTAL_SUPPLY_SLOT, sub(sload(TOTAL_SUPPLY_SLOT), _amount))
             mstore(0x00, _amount)
