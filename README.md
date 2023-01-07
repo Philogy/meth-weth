@@ -5,7 +5,7 @@ implementation while adding functionality that enhance the UX and efficiency of 
 
 ## WETH9 Anti-patterns
 To understand the optimizations possible with YAM-WETH we must first understand some of the common
-anti-patterns introduced by WETH9's simplistic implementation. WETH9 namely lacks direct wrapping
+anti-patterns introduced by WETH9's simplistic implementation. WETH9 namely lacks extended wrapping
 and unwrapping methods (`withdraw`, `deposit`). Every wrap and unwrap occurs directly to and from
 the caller's balance, however interfacing contract's often want to unwrap / wrap ETH on behalf of
 other accounts.
@@ -26,19 +26,11 @@ other accounts.
   ```
 - `YAM_WETH.withdrawFrom(account, amount);` replaces:
   ```solidity
-  receive() external payable {
-      require(msg.sender == address(WETH));
-  }
-  // ...
   WETH.transferFrom(account, address(this), amount);
   WETH.withdraw(amount);
   ```
 - `YAM_WETH.withdrawFromTo(from, to, amount);` replaces:
   ```solidity
-  receive() external payable {
-      require(msg.sender == address(WETH));
-  }
-  // ...
   WETH.transferFrom(from, address(this), amount);
   WETH.withdraw(amount);
   SafeTransferLib.safeTransferETH(to, amount);
