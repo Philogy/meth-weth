@@ -1,13 +1,13 @@
 # Yet Another Maximized Wrapped Ether implementation (YAM WETH)
-Inspired by the commonly used [WETH9](https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2)
-implementation and memes about it potentially being insolvent. Aims to be a more efficient
-implementation while adding functionality that enhance the UX and efficiency of its general use.
+YAM-WETH is a safer, more efficient, more UX and DX friendly version of the commonly used
+[WETH9](https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) wrapped ether
+contract. Written almost entirely in inline-assembly YAM-WETH is incredibly gas efficient.
 
 ## WETH9 Anti-patterns
 To understand the optimizations possible with YAM-WETH we must first understand some of the common
-anti-patterns introduced by WETH9's simplistic implementation. WETH9 namely lacks direct wrapping
-and unwrapping methods (`withdraw`, `deposit`). Every wrap and unwrap occurs directly to and from
-the caller's balance, however interfacing contract's often want to unwrap / wrap ETH on behalf of
+anti-patterns introduced by WETH9's simplistic implementation. WETH9 namely lacks extended wrapping
+ "deposit" and unwrapping "withdraw". Every wrap and unwrap occurs directly to and from
+the caller's balance, however interfacing contracts often want to unwrap / wrap ETH on behalf of
 other accounts.
 
 - `YAM_WETH.depositTo{ value: amount }(recipient);` replaces:
@@ -59,13 +59,16 @@ not have:
   `transferFrom` calls that rely on a granted allowance.
 - Batched wrapping: Outside of `multicall` wrapping WETH on behalf of multiple accounts is made
   highly efficient via the purpose made `depositToMany`  and `depositAmountsToMany` methods.
+- No silent fallback method. While YAM-WETH has a `receive` method accepting and wrapping ETH sent
+  with no calldata, unlike WETH9 it will revert if unsupported calldata is sent. WETH9's silent `fallback`
+  method has been the cause of many vulnerabilities in external contracts in the past.
 
 ## Storage Layout
 To save gas a non-standard storage layout is used:
 
 Slot Name | Slot Determination | Values Stored (Bits)
 ----|----|----
-Total Supply | `slot = 0` | (95-0: `totalSupply`)
+Total Supply | `slot = keccak256("YAM_WETH.totalSupply") - 1` | (95-0: `totalSupply`)
 Main Account Data of `account` | `slot = account` | (255-96: `primaryOperator`, 95-0: `balance`)
 Allowance `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))` | (255-0: `allowance`)
 ERC-2612 Permit Nonce of `account` | `slot = account << 96` | (255-0: `nonce`)
