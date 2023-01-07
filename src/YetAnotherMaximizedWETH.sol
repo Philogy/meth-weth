@@ -69,6 +69,9 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
     }
 
     receive() external payable {
+        assembly {
+            returndatacopy(returndatasize(), returndatasize(), iszero(callvalue()))
+        }
         deposit();
     }
 
@@ -121,7 +124,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
     /// @notice Similar to `approve(_newOperator, type(uint).max)` except that `transferFrom` is
     /// cheaper for the primary operator
     /// @param _newOperator The address to become the primary operator of `msg.sender`.
-    /// @return Whether the call was successful, always `true`. Method only reverts upon out of gas
+    /// @return Whether the call was successful, always `true`. Method only reverts when out of gas.
     function setPrimaryOperator(address _newOperator) external payable succeeds returns (bool) {
         assembly {
             let callerData := sload(caller())
@@ -327,17 +330,16 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
         uint prevTotalSupply = _getTotalSupply();
         uint maxLoan = _getMaxLoan(prevTotalSupply);
         assembly {
-            // Basic check.
-            if iszero(and(eq(_token, address()), iszero(gt(_amount, maxLoan)))) {
+            if iszero(and(eq(_token, address()), and(iszero(gt(_amount, maxLoan)), eq(_receiver, caller())))) {
                 // `revert InvalidFlashParams()`
                 mstore(0x00, 0x331eb0f0)
                 revert(0x1c, 0x04)
             }
             // Mint tokens to flash mint receiver.
             sstore(TOTAL_SUPPLY_SLOT, add(prevTotalSupply, _amount))
-            sstore(caller(), add(sload(_receiver), _amount))
+            sstore(caller(), add(sload(caller()), _amount))
             mstore(0x60, _amount)
-            log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, _receiver)
+            log3(0x60, 0x20, TRANSFER_EVENT_SIG, 0, caller())
 
             // Trigger `onFlashLoan(address,address,uint,uint,bytes)` callback.
             mstore(0x00, 0x23e30c8b)
@@ -431,6 +433,10 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
         return _getMaxLoan(_getTotalSupply());
     }
 
+    /// @dev Returns what percentage of the current *potential* supply could exist atmost during
+    /// a flashloan. A cap of e.g. `10100` would signify the total supply could be expanded to 1% more
+    /// than WETH's Ether balance.
+    /// @return Percentage of current supply in basis points.
     function getSupplyCapMultiple() external view returns (uint) {
         return _getSupplyCapMultiple();
     }
@@ -442,6 +448,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable, IERC3156FlashLender {
                 mstore(0x00, 0x331eb0f0)
                 revert(0x1c, 0x04)
             }
+            // Return 0 from zero pointer.
             return(0x60, 0x20)
         }
     }

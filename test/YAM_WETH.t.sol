@@ -7,6 +7,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {Reverter} from "./mocks/Reverter.sol";
 import {IERC3156FlashBorrower} from "../src/flashloan/IERC3156FlashBorrower.sol";
 import {Borrower} from "./mocks/borrowers/Borrower.sol";
+import {INotWETH} from "./mocks/INotWETH.sol";
 
 contract YAM_WETH_Test is Test {
     using LibString for address;
@@ -109,6 +110,7 @@ contract YAM_WETH_Test is Test {
     }
 
     function testDepositFallback(address _account, uint96 _amount) public realAddr(_account) {
+        vm.assume(_amount != 0);
         vm.deal(_account, _amount);
         vm.prank(_account);
         vm.expectEmit(true, true, true, true);
@@ -938,6 +940,25 @@ contract YAM_WETH_Test is Test {
         assertEq(borrower.lastData(), _data);
         assertEq(weth.totalSupply(), _totalSupply);
         assertEq(weth.balanceOf(address(borrower)), 0);
+    }
+
+    function testNoFallback() public {
+        vm.prank(globUser);
+        vm.expectRevert(bytes(""));
+        INotWETH(address(weth)).definitelyNotAWETHMethod();
+    }
+
+    function testNoEmptyReceive() public {
+        vm.prank(globUser);
+        (bool success, ) = address(weth).call("");
+        assertFalse(success);
+    }
+
+    function testNoPaidFallback() public {
+        vm.deal(globUser, 1 wei);
+        vm.prank(globUser);
+        vm.expectRevert(bytes(""));
+        INotWETH(address(weth)).definitelyNotAWETHMethod{value: 1 wei}();
     }
 
     function checkWETHBalance(address _borrower, uint _expectedBal) public {
