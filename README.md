@@ -1,19 +1,59 @@
-# Yet Another Maximized Wrapped Ether implementation (YAM WETH)
-Inspired by the commonly used [WETH9](https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2)
-implementation and memes about it potentially being insolvent. Aims to be a more efficient
-implementation while adding functionality that enhance the UX and efficiency of its general use.
+# YAM-WETH
+"YAM-WETH" is an overall better version of the commonly used [WETH9](https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) contract,
+providing a trustless, immutable and standardized way for smart contracts to abstract away the
+difference between the native ETH asset and fungible [ERC20](https://eips.ethereum.org/EIPS/eip-20) tokens.
 
-## WETH9 Anti-patterns
-To understand the optimizations possible with YAM-WETH we must first understand some of the common
-anti-patterns introduced by WETH9's simplistic implementation. WETH9 namely lacks extended wrapping
-and unwrapping methods (`withdraw`, `deposit`). Every wrap and unwrap occurs directly to and from
-the caller's balance, however interfacing contract's often want to unwrap / wrap ETH on behalf of
-other accounts.
+> Why "YAM-WETH" inspired by the name of the YAML format "YAM-WETH" stands for "Yet Another
+> Maximized WETH"
+
+## ✅ Why YAM WETH over WETH9?
+
+### 🔒 More Safety
+
+WETH9 does not have a `permit` method but implements a silent fallback method meaning it'll silently accept
+a call to all methods, even ones it hasn't implemented. This often leads to unforseen
+vulnerabilities when developers expect their contracts to interact with ERC20 tokens that implement
+certain methods or at the very least to revert if they do not implement the methods. This was e.g. the
+cause of [Multicoin's $ 1M bridge hack](https://medium.com/zengo/without-permit-multichains-exploit-explained-8417e8c1639b).
+
+YAM-WETH does **not** have a silent fallback method and will revert if it's called for a method it
+hasn't implemented. YAM-WETH does however implement its `receive` method.
+
+### 👤 Improved UX
+
+**Multicall**
+
+Unlike WETH9, YAM-WETH allows call-batching via its `multicall(bytes[] memory calls)` method. This
+allows EOAs to trigger multiple methods in one transaction. This could be used to revoke multiple
+allowances in a single transaction or combine different calls together.
+
+**ERC-2612 Permits**
+
+> Note: It's still unsure whether this will make it into the final version due to long-term concerns
+> around ec-recover's lack of quantum resistance.
+
+YAM-WETH implements ERC-2612 allowing users to gas-lessly approve contracts and/or interact with
+applications that support the standard in a single on-chain transaction rather than two.
+
+**Primary operator**
+
+Primary operators are similar to "approved for all" operators from the ERC721 standard. They have
+the permission to spend an infinite amount of tokens on behalf of a user similar to if they were
+approved via `weth.approve(operator, type(uint).max);`. A user sets their primary operator via
+`setPrimaryOperator(address)` and checks which operator is set via the `primaryOperatorOf(address)`
+method. The advantage for user of approving a contract via the primary operator vs. ERC20 allowances
+is that the primary operator is stored in the same slot as the balance meaning that setting and
+subsequent transfers by the primary operator will cost less gas than ERC20 allowances.
+
+### 💻 Improved Contract-level Interaction
+Common patterns are made more efficient by packing them into single calls. Beyond saving on call
+overhead the methods are also more efficient because they don't need to update intermediary storage
+variables. Certain methods also allow contracts to avoid otherwise unused `receive` / payable `fallback` methods.
 
 - `YAM_WETH.depositTo{ value: amount }(recipient);` replaces:
   ```solidity
-  WETH.deposit{ value: amount}();
-  WETH.transfer(recipient, amount);
+  WETH9.deposit{ value: amount}();
+  WETH9.transfer(recipient, amount);
   ```
 - `YAM_WETH.withdrawTo(recipient, amount);` replaces:
   ```solidity
@@ -21,36 +61,35 @@ other accounts.
       require(msg.sender == address(WETH));
   }
   // ...
-  WETH.withdraw(amount);
+  WETH9.withdraw(amount);
   SafeTransferLib.safeTransferETH(recipient, amount);
   ```
 - `YAM_WETH.withdrawFrom(account, amount);` replaces:
   ```solidity
-  WETH.transferFrom(account, address(this), amount);
-  WETH.withdraw(amount);
+  WETH9.transferFrom(account, address(this), amount);
+  WETH9.withdraw(amount);
   ```
 - `YAM_WETH.withdrawFromTo(from, to, amount);` replaces:
   ```solidity
-  WETH.transferFrom(from, address(this), amount);
-  WETH.withdraw(amount);
+  receive() external payable {
+      require(msg.sender == address(WETH));
+  }
+  // ...
+  WETH9.transferFrom(from, address(this), amount);
+  WETH9.withdraw(amount);
   SafeTransferLib.safeTransferETH(to, amount);
   ```
 
-Instead of having to perform these common patterns as distinctive calls YAM-WETH allows contracts to
-directly perform them via a single call.
+### ⚡ Highly Optimized
+YAM-WETH is written almost entirely in inline-assembly ensuring it's implementation is as efficient
+as possible. Certain "require"s are done using the branchless trick demonstrated by [Vectorized](https://twitter.com/optimizoor/status/1611614269900001280).
+The branchless requires consume all gas when reverting so they're only used for conditions that can
+be verified before submitting a call / transaction such as zero-address and signature validity
+checks.
 
-## Further Features
-Beyond making common patterns more efficient YAM-WETH adds the following features which WETH9 does
-not have:
-- Multicall support: EOAs can safely bundle multiple calls into one transaction.
-- ERC-2612 `permit`s: Allows users to gas-lessly approve contracts
-- Primary operator: Allows users to set a primary operator which can spend tokens on their behalf,
-  advantage over `approve` is that `transferFrom` calls by the primary operator are cheaper vs.
-  `transferFrom` calls that rely on a granted allowance.
-- Batched wrapping: Outside of `multicall` wrapping WETH on behalf of multiple accounts is made
-  highly efficient via the purpose made `depositToMany`  and `depositAmountsToMany` methods.
+## ⚙️ YAM-WETH under the hood
 
-## Storage Layout
+### Storage Layout
 To save gas a non-standard storage layout is used:
 
 Slot Name | Slot Determination | Values Stored (Bits)
@@ -60,12 +99,11 @@ Main Account Data of `account` | `slot = account` | (255-96: `primaryOperator`, 
 Allowance `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))` | (255-0: `allowance`)
 ERC-2612 Permit Nonce of `account` | `slot = account << 96` | (255-0: `nonce`)
 
-## Invariants
+### Invariants
 Environment (Env) or external (Ext) dependency based invariants are assumed facts that if broken would allow for
 some failures in the contract. Internal (Int) invariants are invariants that are expected to hold
 for the logic, violations are unintended bugs and potential vulnerabilities.
 
-- (Env): `msg.sender` (`caller()`) cannot be zero-address
-- (Ext): Permit2 will not call `transferFrom` with `from` being the zero-address
-- (Int): total supply should never exceed `2**96-1`
+- (Env): `msg.sender` (`caller()`) cannot be the zero-address
+- (Int): total supply must never exceed `2**96-1`
 - (Int): `balanceOf`, `primaryOperatorOf`, `nonces` will always return `0` for the zero-address
