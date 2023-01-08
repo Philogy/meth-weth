@@ -371,7 +371,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_amount > 1 wei);
         setupBalance(_from, _amount);
         vm.prank(_operator);
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
         weth.withdrawFrom(_from, 1 wei);
     }
 
@@ -441,7 +441,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_initialWethBalance < _withdrawAmount);
         setupBalance(_account, _initialWethBalance);
         vm.prank(_account);
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
         weth.withdraw(_withdrawAmount);
     }
 
@@ -599,7 +599,7 @@ contract YAM_WETH_Test is Test {
         vm.assume(_fromStartBal < _transferAmount);
         setupBalance(_from, _fromStartBal);
         vm.prank(_from);
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.InsufficientBalance.selector);
         weth.transfer(_to, _transferAmount);
     }
 
@@ -607,7 +607,7 @@ contract YAM_WETH_Test is Test {
         setupBalance(_from, 1e18);
 
         vm.prank(_operator);
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
         weth.transferFrom(_from, _operator, 1);
     }
 
@@ -629,7 +629,7 @@ contract YAM_WETH_Test is Test {
         setupAllowance(_from, _operator, _allowance);
 
         vm.prank(_operator);
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.InsufficientPermission.selector);
         weth.transferFrom(_from, _operator, _startBal);
     }
 
@@ -759,7 +759,7 @@ contract YAM_WETH_Test is Test {
             computePermitHash(owner, _spender, _allowance, _nonce, _deadline)
         );
 
-        vm.expectRevert(bytes(""));
+        vm.expectRevert(YAM_WETH.PermitExpired.selector);
         weth.permit(owner, _spender, _allowance, _deadline, v, r, s);
     }
 

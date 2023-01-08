@@ -36,6 +36,10 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     address internal constant EC_RECOVER_PRECOMPILE = 0x0000000000000000000000000000000000000001;
 
+    error InsufficientBalance();
+    error InsufficientPermission();
+    error PermitExpired();
+
     modifier succeeds() {
         _;
         assembly {
@@ -248,7 +252,11 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
         bytes32 domainSeparator = DOMAIN_SEPARATOR();
         assembly {
             // Check deadline vs. timestamp.
-            returndatacopy(returndatasize(), returndatasize(), gt(timestamp(), _deadline))
+            if gt(timestamp(), _deadline) {
+                // `revert PermitExpired()`
+                mstore(0x00, 0x1a15a3cc)
+                revert(0x1c, 0x04)
+            }
 
             // Prepare main permit fields.
             mstore(0x00, PERMIT_TYPE_HASH)
@@ -366,12 +374,14 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
 
     function _transfer(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
-            // Check for zero address and sufficient balance.
-            returndatacopy(
-                returndatasize(),
-                returndatasize(),
-                or(iszero(_to), gt(_amount, and(_fromData, BALANCE_MASK)))
-            )
+            // Checks for zero-address.
+            returndatacopy(returndatasize(), returndatasize(), iszero(_to))
+            // Check balance.
+            if gt(_amount, and(_fromData, BALANCE_MASK)) {
+                // `revert InsufficientBalance()`
+                mstore(0x00, 0xf4d678b8)
+                revert(0x1c, 0x04)
+            }
             sstore(_from, sub(_fromData, _amount))
             sstore(_to, add(sload(_to), _amount))
             mstore(0x00, _amount)
@@ -390,8 +400,14 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
                 let allowanceSlot := keccak256(0x00, 0x40)
                 let senderAllowance := sload(allowanceSlot)
                 if iszero(eq(senderAllowance, not(0))) {
-                    // Check allowance and that from address not zero.
-                    returndatacopy(returndatasize(), returndatasize(), or(iszero(_from), gt(_amount, senderAllowance)))
+                    // Check `_from` is not zero-address.
+                    returndatacopy(returndatasize(), returndatasize(), iszero(_from))
+                    // Check allowance.
+                    if gt(_amount, senderAllowance) {
+                        // `revert InsufficientPermission()`
+                        mstore(0x00, 0xdeda9030)
+                        revert(0x1c, 0x04)
+                    }
                     sstore(allowanceSlot, sub(senderAllowance, _amount))
                 }
             }
@@ -407,7 +423,11 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
     function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint _amount) internal {
         assembly {
             // Check balance.
-            returndatacopy(returndatasize(), returndatasize(), gt(_amount, and(_fromData, BALANCE_MASK)))
+            if gt(_amount, and(_fromData, BALANCE_MASK)) {
+                // `revert InsufficientBalance()`
+                mstore(0x00, 0xf4d678b8)
+                revert(0x1c, 0x04)
+            }
 
             sstore(_from, sub(_fromData, _amount))
             sstore(TOTAL_SUPPLY_SLOT, sub(sload(TOTAL_SUPPLY_SLOT), _amount))
