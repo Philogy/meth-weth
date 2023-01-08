@@ -17,7 +17,18 @@ certain methods or at the very least to revert if they do not implement the meth
 cause of [Multicoin's $ 1M bridge hack](https://medium.com/zengo/without-permit-multichains-exploit-explained-8417e8c1639b).
 
 YAM-WETH does **not** have a silent fallback method and will revert if it's called for a method it
-hasn't implemented. YAM-WETH does however implement its `receive` method.
+hasn't implemented. YAM-WETH does however implement its `receive` method. Allowing you to deposit if
+you explicitly send ETH along with no calldata.
+
+### 🧩 Backwards Compatible
+
+The previously existing `withdraw`, `deposit` and `receive` fallback method behave like WETH9's
+method meaning it should be a drop-in replacement.
+
+The only differences that may have to be considered:
+1. Calling `permit` on YAM-WETH will not silently pass
+2. Calling methods that are not implemented will not silently pass, if you need to wrap ETH to WETH
+   either send it directly with no calldata or use on of the `deposit` methods.
 
 ### 👤 Improved UX
 
@@ -78,6 +89,14 @@ variables. Certain methods also allow contracts to avoid otherwise unused `recei
   WETH9.transferFrom(from, address(this), amount);
   WETH9.withdraw(amount);
   SafeTransferLib.safeTransferETH(to, amount);
+  ```
+- `YAM_WETH.depositToMany(recipients, amount)` replaces:
+  ```solidity
+  WETH9.deposit{ value: amount * recipients.length }();
+  for (uint i = 0; i < recipients.length; i++) {
+    WETH9.transfer(recipients[i], amount);
+  }
+
   ```
 
 ### ⚡ Highly Optimized
