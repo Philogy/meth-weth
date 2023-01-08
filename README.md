@@ -3,7 +3,7 @@
 providing a trustless, immutable and standardized way for smart contracts to abstract away the
 difference between the native ETH asset and fungible [ERC20](https://eips.ethereum.org/EIPS/eip-20) tokens.
 
-> Why "YAM-WETH" inspired by the name of the YAML format "YAM-WETH" stands for "Yet Another
+> The name "YAM-WETH" is inspired by the name of the YAML format. "YAM-WETH" stands for "Yet Another
 > Maximized WETH"
 
 ## ✅ Why YAM WETH over WETH9?
