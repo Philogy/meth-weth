@@ -26,9 +26,10 @@ The previously existing `withdraw`, `deposit` and `receive` fallback method beha
 method meaning it should be a drop-in replacement.
 
 The only differences that may have to be considered:
-1. Calling `permit` on YAM-WETH will not silently pass
+1. Calling `permit` on YAM-WETH will not silently pass, YAM-WETH (currently) implements a permit
+   method.
 2. Calling methods that are not implemented will not silently pass, if you need to wrap ETH to WETH
-   either send it directly with no calldata or use on of the `deposit` methods.
+   either send it directly with no calldata or use one of the `deposit` methods.
 
 ### 👤 Improved UX
 
