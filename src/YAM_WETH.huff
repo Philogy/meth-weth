@@ -10,11 +10,13 @@
 #define event Approval(address indexed, address indexed, uint256)
 
 #define error InsufficientBalance()
+#define error InsufficientAllowance()
 
 // -- ERC712 Constants
 #define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
 #define constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76
 #define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
+#define constant DECIMALS = 0x12 // 18
 
 
 // -- Utility Functions
@@ -36,19 +38,50 @@
     0x04 0x1c return
 }
 
-#define macro RETURN_SUCCESS(zero) = takes(0) returns(0) {
-    0x01 <zero> mstore
-    0x20 <zero> return
+#define macro RETURN_UINT(zero) = takes(1) returns(0) {
+    // takes:             [x]
+    <zero> mstore      // []
+    0x20 <zero> return // []
+}
+
+#define macro RETURN_TRUE(zero) = takes(0) returns(0) {
+    0x1 RETURN_UINT(<zero>)
 }
 
 #define macro BUBBLE_REVERT(zero) = takes(1) returns(0) {
     // takes:             [success]
     no_bubble jumpi
-    returndatasize <zero> <zero> returndatacopy
-    returndatasize <zero> revert
+        returndatasize <zero> <zero> returndatacopy
+        returndatasize <zero> revert
     no_bubble:
 }
 
+#define macro NO_VALUE() = takes(0) returns(0) {
+    callvalue empty_revert jumpi
+}
+
+#define macro SEND_ETH_TO_CALLER(zero, zero2) = takes(1) returns(0) {
+    // takes:                      [amount]
+
+    <zero> <zero> <zero> <zero> // [0, 0, 0, 0, amount]
+    swap4 caller gas            // [gas, msg.sender, amount, 0, 0, 0, 0]
+    call                        // [success]
+    BUBBLE_REVERT(<zero2>)       // []
+
+    // returns:                    []
+}
+
+#define macro SEND_ETH(zero, zero2) = takes(2) returns(0) {
+    // takes:        [amount, recipient]
+
+    <zero> <zero> // [0, 0, amount, recipient]
+    <zero>        // [0, 0, 0, amount, recipient]
+    swap3         // [amount, 0, 0, 0, recipient]
+    <zero>        // [0, amount, 0, 0, 0, recipient]
+    swap5         // [recipient, amount, 0, 0, 0, 0]
+    gas call      // [success]
+    BUBBLE_REVERT(<zero2>)
+}
 
 // -- External Functions
 // ---- Metadata / Global Methods
@@ -68,21 +101,19 @@
 }
 
 #define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
-    0x12 <zero> mstore
-    0x20 <zeso> return
+    [DECIMALS] RETURN_UINT(<zero>)
 }
 
 #define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
-    [TOTAL_SUPPLY_SLOT] sload <zero> mstore
-    0x20 <zero> return
+    [TOTAL_SUPPLY_SLOT] sload RETURN_UINT(<zero>)
 }
 
 // ---- Transfer related methods
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 calldataload       // [account]
     dup1 REQUIRE_ADDRESS()  // [account]
-    sload <zero> mstore     // []
-    0x20 <zero> return
+    sload                   // [account.bal]
+    RETURN_UINT(<zero>)
 }
 
 #define macro TRANSFER(zero) = takes(5) returns(0) {
@@ -119,7 +150,7 @@
     dup1 caller       // [msg.sender, amount, amount, msg.sender, to]
     TRANSFER(<zero>)
 
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 }
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
@@ -141,7 +172,7 @@
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
     0x20 <zero> log3       // []
 
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 }
 
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
@@ -156,6 +187,24 @@
     0x20 <zero> return
 }
 
+
+// Actually "returns" 4 if jumping to `use_allowance_2pop`
+/// @dev Checks and updates `from`'s allowance to caller
+#define macro USE_ALLOWANCE(zero, use_allowance_2pop) = takes(2) returns(2) {
+    // takes:             [amount, from]
+    dup2 <zero> mstore // [amount, from]
+    caller 0x20 mstore // [amount, from]
+    0x40 <zero> sha3   // [allowance.slot, amount, from]
+    dup1 sload         // [allowance, allowance.slot, amount, from]
+    dup1 [MAX_UINT] eq <use_allowance_2pop> jumpi
+    //                    [allowance, allowance.slot, amount, from]
+    dup1 dup4          // [amount, allowance, allowance, allowance.slot, amount, from]
+    gt insufficient_allowance_error jumpi
+    //                    [allowance, allowance.slot, amount, from]
+    dup3 swap1 sub     // [allowance', allowance.slot, amount, from]
+    swap1 sstore       // [amount, from]
+}
+
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Do Param Verification
     0x24 calldataload  // [to]
@@ -165,29 +214,21 @@
     //                    [amount, from, to]
 
     // -- Verify Allowance
-    dup2 <zero> mstore // [amount, from, to]
-    caller 0x20 mstore // [amount, from, to]
-    0x40 <zero> sha3   // [allowance.slot, amount, from, to]
-    dup1 sload         // [allowance, allowance.slot, amount, from, to]
-    dup1 [MAX_UINT] eq inf_allowance_transfer_from jumpi
-    //                    [allowance, allowance.slot, amount, from, to]
-    dup1 dup4          // [amount, allowance, allowance, allowance.slot, amount, from, to]
-    gt insufficient_allowance_error jumpi
-    //                    [allowance, allowance.slot, amount, from, to]
-    dup3 swap1 sub     // [allowance', allowance.slot, amount, from, to]
-    swap1 sstore       // [amount, from, to]
+    USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
+    //                    [amount, from, to]
 
-    // -- Finish Transfer
+    // -- Finish Transfer (no pop version)
     dup1 dup3          // [from, amount, amount, from, to]
     TRANSFER(<zero>)
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 
-    inf_allowance_transfer_from:
+    // -- Finish Transfer (2x pop version, removes necessity for added jump)
+    transfer_from_allowed_2pop:
     //                    [allowance, allowance.slot, amount, from, to]
     pop pop            // [amount, from, to]
     dup1 dup3          // [from, amount, amount, from, to]
     TRANSFER(<zero>)
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 }
 
 #define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
@@ -209,7 +250,7 @@
     selfbalance swap1   // [total_supply.slot, this.balance]
     sstore              // []
 
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 }
 
 #define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
@@ -234,11 +275,11 @@
     selfbalance swap1   // [total_supply.slot, this.balance]
     sstore              // []
 
-    RETURN_SUCCESS(<zero>)
+    RETURN_TRUE(<zero>)
 }
 
-#define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload     // [amount]
+#define macro BURN_FROM_CALLER(zero) = takes(1) returns(0) {
+    // takes:                [amount]
 
     // -- Update Balance
     dup1                  // [amount, amount]
@@ -256,19 +297,102 @@
     swap1 sstore          // [amount]
 
     // -- Emit Transfer
-    dup1 <zero> mstore    // [amount]
+    <zero> mstore         // [amount]
     <zero> caller __EVENT_HASH(Transfer)
-    //                       [Transfer.sig, recipient, msg.sender, amount]
-    0x20 <zero> log3      // [amount]
+    //                       [Transfer.sig, msg.sender, 0]
+    0x20 <zero> log3      // []
 
-    // -- Transfer out ETH
-    <zero> <zero> <zero> <zero>
-    //                       [0, 0, 0, 0, amount]
-    swap4 caller gas      // [gas, msg.sender, amount, 0, 0, 0, 0]
-    call                  // [success]
-    BUBBLE_REVERT(<zero>) // []
+    // returns:              []
+}
 
-    RETURN_SUCCESS(<zero>)
+#define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
+    0x04 calldataload                // [amount]
+    dup1                             // [amount, amount]
+    BURN_FROM_CALLER(<zero>)         // [amount]
+    SEND_ETH_TO_CALLER(<zero>, 0x00) // []
+    RETURN_TRUE(0x00)             // []
+}
+
+#define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
+    0x04 calldataload             // [recipient]
+    dup1 REQUIRE_ADDRESS()        // [recipient]
+    0x24 calldataload             // [amount, recipient]
+    dup1 BURN_FROM_CALLER(<zero>) // [amount, recipient]
+    SEND_ETH(<zero>, 0x00)
+    RETURN_TRUE(0x00)
+}
+
+#define macro BURN_FROM(zero) = takes(2) returns(0) {
+    // takes:                [amount, from]
+
+    // -- Update Balance
+    dup1                  // [amount, amount, from]
+    dup3 sload            // [from.bal, amount, amount, from]
+    dup1 dup3             // [amount, from.bal, from.bal, amount, amount, from]
+    gt insufficient_bal_error jumpi
+    //                       [from.bal, amount, amount, from]
+    sub                   // [from.bal', amount, from]
+    dup3 sstore           // [amount, from]
+
+    // -- Update Total Supply
+    [TOTAL_SUPPLY_SLOT]   // [total_supply.slot, amount, from]
+    dup2 dup2             // [total_supply.slot, amount, total_supply.slot, amount, from]
+    sload sub             // [total_supply', total_supply.slot, amount, from]
+    swap1 sstore          // [amount, from]
+
+    // -- Emit Transfer
+    <zero> mstore         // [from]
+    <zero> swap1 __EVENT_HASH(Transfer)
+    //                       [Transfer.sig, from, 0]
+    0x20 <zero> log3      // []
+
+    // returns:              []
+}
+
+#define macro WITHDRAW_FROM_END(zero, zero2) = takes(3) returns(0) {
+    // takes:                              [amount, from, amount]
+
+    BURN_FROM(<zero>)                   // [amount]
+    SEND_ETH_TO_CALLER(<zero>, <zero2>) // []
+    RETURN_TRUE(<zero2>)
+}
+
+#define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
+    0x24 calldataload       // [amount]
+    0x04 calldataload       // [from, amount]
+    dup1 REQUIRE_ADDRESS()  // [from, amount]
+    dup2                    // [amount, from, amount]
+
+    USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
+        //                     [amount, from, amount]
+        WITHDRAW_FROM_END(<zero>, 0x00)
+    withdraw_from_allowed_2pop:
+        pop pop             // [amount, from, amount]
+        WITHDRAW_FROM_END(<zero>, 0x00)
+}
+
+#define macro WITHDRAW_FROM_TO_END(zero, zero2) = takes(4) returns(0) {
+    // takes:                              [amount, from, amount, to]
+
+    BURN_FROM(<zero>)                   // [amount, to]
+    SEND_ETH(<zero>, <zero2>)           // []
+    RETURN_TRUE(<zero2>)
+}
+
+#define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
+    0x24 calldataload       // [to]
+    0x44 calldataload       // [amount, to]
+    0x04 calldataload       // [from, amount, to]
+    dup3 dup2 REQUIRE_ADDRESS()
+    //                         [from, amount, to]
+    dup2                    // [amount, from, amount, to]
+
+    USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
+        //                     [amount, from, amount, to]
+        WITHDRAW_FROM_TO_END(<zero>, 0x00)
+    withdraw_from_to_allowed_2pop:
+        pop pop             // [amount, from, amount, to]
+        WITHDRAW_FROM_TO_END(<zero>, 0x00)
 }
 
 #define jumptable__packed FN_TABLE {
@@ -308,6 +432,7 @@
         _TOTAL_SUPPLY_EXTERNAL(<zero>)
     transferFrom:
         dup1 0x23b872dd sub no_selector_match jumpi
+        _TRANSFER_FROM_EXTERNAL(<zero>)
     transfer:
         dup1 0xa9059cbb sub no_selector_match jumpi
         _TRANSFER_EXTERNAL(<zero>)
@@ -335,10 +460,13 @@
         _WITHDRAW_EXTERNAL(<zero>)
     withdrawTo:
         dup1 0x205c2878 sub no_selector_match jumpi
+        _WITHDRAW_TO_EXTERNAL(<zero>)
     withdrawFrom:
         dup1 0x9470b0bd sub no_selector_match jumpi
+        _WITHDRAW_FROM_EXTERNAL(<zero>)
     withdrawFromTo:
         dup1 0xc8993196 sub no_selector_match jumpi
+        _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
     DOMAIN_SEPARATOR:
         dup1 0x3644e515 sub no_selector_match jumpi
     nonces:
@@ -348,17 +476,16 @@
     multicall:
         dup1 0xac9650d8 sub no_selector_match jumpi
     no_selector_match:
-        calldatasize unmatching_nonempty jumpi
+        // `receive()` fallback method, skips to revert if any calldata was sent
+        calldatasize empty_revert jumpi
         _DEPOSIT_EXTERNAL(<zero>)
-        unmatching_nonempty:
-            <zero> <zero> revert
+        empty_revert:
+            0x00 0x00 revert
 
     insufficient_bal_error:
         __FUNC_SIG(InsufficientBalance) REVERT(<zero>)
     insufficient_allowance_error:
-        __FUNC_SIG(InsufficientBalance) REVERT(<zero>)
-
-
+        __FUNC_SIG(InsufficientAllowance) REVERT(<zero>)
 }
 
 #define macro MAIN() = takes(0) returns(0) {
