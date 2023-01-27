@@ -6,9 +6,42 @@
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
 // -- ABI Constants
+// ---- Functions
+// ---- Functions -- Metadata
+#define function name() view returns (string)
+#define function symbol() view returns (string)
+#define function decimals() view returns (uint8)
+// ---- Functions -- Global
+#define function totalSupply() payable returns ()
+// ---- Functions -- Transfer
+#define function transferFrom(address,address,uint256) payable returns ()
+#define function transfer(address, uint256) payable returns ()
+#define function balanceOf(address) payable returns ()
+// ---- Functions -- Allowance
+#define function approve(address,uint256) payable returns ()
+#define function allowance(address, address) payable returns ()
+// ---- Functions -- ERC2612 Permits
+#define function DOMAIN_SEPARATOR() payable returns ()
+#define function nonces(address) payable returns ()
+#define function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) payable returns ()
+// ---- Functions -- Utility
+#define function multicall(bytes[])deposit() payable returns ()
+// ---- Functions -- Wrap
+#define function deposit() payable returns ()
+#define function depositTo(address) payable returns ()
+#define function depositAmountTo(address, uint256) payable returns ()
+#define function depositAmount(uint256) payable returns ()
+// ---- Functions -- Unwrap
+#define function withdraw(uint256) payable returns ()
+#define function withdrawTo(address, uint256) payable returns ()
+#define function withdrawFrom(address, uint256) payable returns ()
+#define function withdrawFromTo(address, address uint256) payable returns ()
+
+// ---- Events
 #define event Transfer(address indexed, address indexed, uint256)
 #define event Approval(address indexed, address indexed, uint256)
 
+// ---- Errors
 #define error InsufficientBalance()
 #define error InsufficientAllowance()
 
@@ -396,7 +429,7 @@
 }
 
 #define jumptable__packed FN_TABLE {
-    depositAmountTo nonces withdrawFrom deposit depositAmount symbol no_selector_match withdraw balanceOf no_selector_match withdrawTo decimals name no_selector_match no_selector_match no_selector_match no_selector_match approve no_selector_match DOMAIN_SEPARATOR withdrawFromTo transferFrom no_selector_match no_selector_match transfer depositTo permit no_selector_match allowance totalSupply no_selector_match multicall
+    depositAmountTo_dest nonces_dest withdrawFrom_dest deposit_dest depositAmount_dest symbol_dest no_selector_match withdraw_dest balanceOf_dest no_selector_match withdrawTo_dest decimals_dest name_dest no_selector_match no_selector_match no_selector_match no_selector_match approve_dest no_selector_match DOMAIN_SEPARATOR_dest withdrawFromTo_dest transferFrom_dest no_selector_match no_selector_match transfer_dest depositTo_dest permit_dest no_selector_match allowance_dest totalSupply_dest no_selector_match multicall_dest
 }
 
 #define macro _MAIN(zero) = takes(0) returns(0) {
@@ -418,63 +451,64 @@
     // -- use jump label
     jump
 
-    name:
-        dup1 0x06fdde03 sub no_selector_match jumpi
+    name_dest:
+        dup1 __FUNC_SIG(name)               sub no_selector_match jumpi
         _NAME_EXTERNAL(<zero>)
-    symbol:
-        dup1 0x95d89b41 sub no_selector_match jumpi
+    symbol_dest:
+        dup1 __FUNC_SIG(symbol)             sub no_selector_match jumpi
         _SYMBOL_EXTERNAL(<zero>)
-    decimals:
-        dup1 0x313ce567 sub no_selector_match jumpi
+    decimals_dest:
+        dup1 __FUNC_SIG(decimals)           sub no_selector_match jumpi
         _DECIMALS_EXTERNAL(<zero>)
-    totalSupply:
-        dup1 0x18160ddd sub no_selector_match jumpi
+    totalSupply_dest:
+        dup1 __FUNC_SIG(totalSupply)        sub no_selector_match jumpi
         _TOTAL_SUPPLY_EXTERNAL(<zero>)
-    transferFrom:
-        dup1 0x23b872dd sub no_selector_match jumpi
+    transferFrom_dest:
+        dup1 __FUNC_SIG(transferFrom)       sub no_selector_match jumpi
         _TRANSFER_FROM_EXTERNAL(<zero>)
-    transfer:
-        dup1 0xa9059cbb sub no_selector_match jumpi
+    transfer_dest:
+        dup1 __FUNC_SIG(transfer)           sub no_selector_match jumpi
         _TRANSFER_EXTERNAL(<zero>)
-    balanceOf:
-        dup1 0x70a08231 sub no_selector_match jumpi
+    balanceOf_dest:
+        dup1 __FUNC_SIG(balanceOf)          sub no_selector_match jumpi
         _BALANCE_OF_EXTERNAL(<zero>)
-    approve:
-        dup1 0x095ea7b3 sub no_selector_match jumpi
+    approve_dest:
+        dup1 __FUNC_SIG(approve)            sub no_selector_match jumpi
         _APPROVE_EXTERNAL(<zero>)
-    allowance:
-        dup1 0xdd62ed3e sub no_selector_match jumpi
+    allowance_dest:
+        dup1 __FUNC_SIG(allowance)          sub no_selector_match jumpi
         _ALLOWANCE_EXTERNAL(<zero>)
-    deposit:
-        dup1 0xd0e30db0 sub no_selector_match jumpi
+    deposit_dest:
+        dup1 __FUNC_SIG(deposit)            sub no_selector_match jumpi
         _DEPOSIT_EXTERNAL(<zero>)
-    depositTo:
-        dup1 0xb760faf9 sub no_selector_match jumpi
+    depositTo_dest:
+        dup1 __FUNC_SIG(depositTo)          sub no_selector_match jumpi
         _DEPOSIT_TO_EXTERNAL(<zero>)
-    depositAmountTo:
-        dup1 0xb2069e40 sub no_selector_match jumpi
-    depositAmount:
-        dup1 0x87f8ab26 sub no_selector_match jumpi
-    withdraw:
-        dup1 0x2e1a7d4d sub no_selector_match jumpi
+    depositAmountTo_dest:
+        dup1 __FUNC_SIG(depositAmountTo)    sub no_selector_match jumpi
+    depositAmount_dest:
+        dup1 __FUNC_SIG(depositAmount)      sub no_selector_match jumpi
+        _DEPOSIT_AMOUNT_EXTERNAL(<zero>)
+    withdraw_dest:
+        dup1 __FUNC_SIG(withdraw)           sub no_selector_match jumpi
         _WITHDRAW_EXTERNAL(<zero>)
-    withdrawTo:
-        dup1 0x205c2878 sub no_selector_match jumpi
+    withdrawTo_dest:
+        dup1 __FUNC_SIG(withdrawTo)         sub no_selector_match jumpi
         _WITHDRAW_TO_EXTERNAL(<zero>)
-    withdrawFrom:
-        dup1 0x9470b0bd sub no_selector_match jumpi
+    withdrawFrom_dest:
+        dup1 __FUNC_SIG(withdrawFrom)       sub no_selector_match jumpi
         _WITHDRAW_FROM_EXTERNAL(<zero>)
-    withdrawFromTo:
-        dup1 0xc8993196 sub no_selector_match jumpi
+    withdrawFromTo_dest:
+        dup1 __FUNC_SIG(withdrawFromTo)     sub no_selector_match jumpi
         _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
-    DOMAIN_SEPARATOR:
-        dup1 0x3644e515 sub no_selector_match jumpi
-    nonces:
-        dup1 0x7ecebe00 sub no_selector_match jumpi
-    permit:
-        dup1 0xd505accf sub no_selector_match jumpi
-    multicall:
-        dup1 0xac9650d8 sub no_selector_match jumpi
+    DOMAIN_SEPARATOR_dest:
+        dup1 __FUNC_SIG(DOMAIN_SEPARATOR)   sub no_selector_match jumpi
+    nonces_dest:
+        dup1 __FUNC_SIG(nonces)             sub no_selector_match jumpi
+    permit_dest:
+        dup1 __FUNC_SIG(permit)             sub no_selector_match jumpi
+    multicall_dest:
+        dup1 __FUNC_SIG(multicall)          sub no_selector_match jumpi
     no_selector_match:
         // `receive()` fallback method, skips to revert if any calldata was sent
         calldatasize empty_revert jumpi
