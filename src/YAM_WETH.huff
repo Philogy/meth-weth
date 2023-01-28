@@ -2,8 +2,11 @@
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
 #define constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532
-#define constant CHAIN_ID = 0x01 // Main deployment will be on Ethereum
+#define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
+#define constant NONCE_SHIFT = 0x80
+#define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define constant DECIMALS = 0x12 // 18
 
 // -- ABI Constants
 // ---- Functions
@@ -47,10 +50,11 @@
 #define error InsufficientFreeBalance()
 
 // -- ERC712 Constants
+// keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
 #define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
 #define constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76
 #define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
-#define constant DECIMALS = 0x12 // 18
+#define constant CACHED_DOMAIN_SEPARATOR = 0xd00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d001
 
 
 // -- Utility Functions
@@ -67,19 +71,26 @@
     or BRANCHLESS_ASSERT_ZERO()
 }
 
+#define macro LOAD_ADDRESS() = takes(1) returns(1) {
+    // takes:         [calldata_pos]
+    calldataload   // [addr]
+    dup1 REQUIRE_ADDRESS()
+    // returns:    // [addr] 
+}
+
 #define macro REVERT(zero) = takes(1) returns(0) {
     <zero> mstore
     0x04 0x1c return
 }
 
-#define macro RETURN_UINT(zero) = takes(1) returns(0) {
+#define macro RETURN_WORD(zero) = takes(1) returns(0) {
     // takes:             [x]
     <zero> mstore      // []
     0x20 <zero> return // []
 }
 
 #define macro RETURN_TRUE(zero) = takes(0) returns(0) {
-    0x1 RETURN_UINT(<zero>)
+    0x1 RETURN_WORD(<zero>)
 }
 
 #define macro BUBBLE_REVERT(zero) = takes(1) returns(0) {
@@ -135,35 +146,39 @@
 }
 
 #define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
-    [DECIMALS] RETURN_UINT(<zero>)
+    [DECIMALS] RETURN_WORD(<zero>)
 }
 
 #define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
-    [TOTAL_SUPPLY_SLOT] sload RETURN_UINT(<zero>)
+    [TOTAL_SUPPLY_SLOT] sload RETURN_WORD(<zero>)
+}
+
+#define macro LOAD_BALANCE() = takes(1) returns(1) {
+    sload [BALANCE_MASK] and
 }
 
 // ---- Transfer related methods
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload       // [account]
-    dup1 REQUIRE_ADDRESS()  // [account]
-    sload                   // [account.bal]
-    RETURN_UINT(<zero>)
+    0x04 LOAD_ADDRESS()     // [account]
+    LOAD_BALANCE()          // [account.bal]
+    RETURN_WORD(<zero>)
 }
 
 #define macro TRANSFER(zero) = takes(5) returns(0) {
     // takes:             [from, amount, amount, from, to]
 
     // -- Update `from` Balance
-    sload dup1         // [from.bal, from.bal, amount, amount, from, to]
-    dup3               // [amount, from.bal, from.bal, amount, amount, from, to]
+    sload dup1         // [from.data, from.data, amount, amount, from, to]
+    [BALANCE_MASK] and // [from.bal, from.data, amount, amount, from, to]
+    dup3               // [amount, from.bal, from.data, amount, amount, from, to]
     gt insufficient_bal_error jumpi
-    //                    [from.bal, amount, amount, from, to]
-    sub                // [from.bal', amount, from, to]
+    //                    [from.data, amount, amount, from, to]
+    sub                // [from.data', amount, from, to]
     dup3 sstore        // [amount, from, to]
 
     // -- Update `to` Balance
-    dup3 sload         // [to.bal, amount, from, to]
-    dup2 add           // [to.bal', amount, from, to]
+    dup3 sload         // [to.data, amount, from, to]
+    dup2 add           // [to.data', amount, from, to]
     dup4 sstore        // [amount, from, to]
 
     // -- Emit `Transfer`
@@ -175,13 +190,12 @@
 
 #define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 calldataload // [to]
-    dup1 REQUIRE_ADDRESS()
-    caller            // [msg.sender, to]
-    0x24 calldataload // [amount, msg.sender, to]
+    0x04 LOAD_ADDRESS() // [to]
+    caller              // [msg.sender, to]
+    0x24 calldataload   // [amount, msg.sender, to]
 
     // -- Transfer
-    dup1 caller       // [msg.sender, amount, amount, msg.sender, to]
+    dup1 caller         // [msg.sender, amount, amount, msg.sender, to]
     TRANSFER(<zero>)
 
     RETURN_TRUE(<zero>)
@@ -189,9 +203,8 @@
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 calldataload      // [spender]
+    0x04 LOAD_ADDRESS()    // [spender]
     0x24 calldataload      // [amount, spender]
-    dup2 REQUIRE_ADDRESS() // [amount, spender]
 
     // -- Store approval
     caller <zero> mstore   // [amount, spender]
@@ -239,6 +252,13 @@
     swap1 sstore       // [amount, from]
 }
 
+#define macro TRANSFER_FROM_END(zero) = takes(3) returns(0) {
+    // takes:             [amount, from, to]
+    dup1 dup3          // [from, amount, amount, from, to]
+    TRANSFER(<zero>)   // []
+    RETURN_TRUE(<zero>)
+}
+
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Do Param Verification
     0x24 calldataload  // [to]
@@ -249,20 +269,12 @@
 
     // -- Verify Allowance
     USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
-    //                    [amount, from, to]
-
-    // -- Finish Transfer (no pop version)
-    dup1 dup3          // [from, amount, amount, from, to]
-    TRANSFER(<zero>)
-    RETURN_TRUE(<zero>)
-
-    // -- Finish Transfer (2x pop version, removes necessity for added jump)
+        //                  [amount, from, to]
+        TRANSFER_FROM_END(<zero>)
     transfer_from_allowed_2pop:
-    //                    [allowance, allowance.slot, amount, from, to]
-    pop pop            // [amount, from, to]
-    dup1 dup3          // [from, amount, amount, from, to]
-    TRANSFER(<zero>)
-    RETURN_TRUE(<zero>)
+        //                [allowance, allowance.slot, amount, from, to]
+        pop pop        // [amount, from, to]
+        TRANSFER_FROM_END(<zero>)
 }
 
 #define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
@@ -284,12 +296,11 @@
     selfbalance swap1   // [total_supply.slot, this.balance]
     sstore              // []
 
-    RETURN_TRUE(<zero>)
+    stop
 }
 
 #define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload   // [recipient]
-    dup1 REQUIRE_ADDRESS()
+    0x04 LOAD_ADDRESS() // [recipient]
 
     [TOTAL_SUPPLY_SLOT] // [total_supply.slot, recipient]
     dup1 sload          // [total_supply, total_supply.slot, recipient]
@@ -309,7 +320,7 @@
     selfbalance swap1   // [total_supply.slot, this.balance]
     sstore              // []
 
-    RETURN_TRUE(<zero>)
+    stop
 }
 
 #define macro _DEPOSIT_AMOUNT_EXTERNAL(zero) = takes(0) returns(0) {
@@ -339,9 +350,42 @@
     <zero> mstore       // []
     caller <zero> __EVENT_HASH(Transfer)
     //                     [Transfer.sig, 0, msg.sender]
-    0x20 <zero> log3
+    0x20 <zero> log3    // []
 
-    RETURN_TRUE(<zero>)
+    stop
+}
+
+#define macro _DEPOSIT_AMOUNT_TO_EXTERNAL(zero) = takes(0) returns(0) {
+    0x04 LOAD_ADDRESS() // [to]
+    0x24 calldataload   // [amount, to]
+
+    // -- Verify `amount` Against Free Balance
+    [TOTAL_SUPPLY_SLOT] // [total_supply.slot, amount, to]
+    dup1 sload          // [total_supply, total_supply.slot, amount, to]
+    dup1                // [total_supply, total_supply, total_supply.slot, amount, to]
+    selfbalance sub     // [avail_amount, total_supply, total_supply.slot, amount, to]
+
+    dup4                // [amount, avail_amount, total_supply, total_supply.slot, amount, to]
+    gt insufficent_free_balance_error jumpi
+    //                     [total_supply, total_supply.slot, amount, to]
+
+    // -- Update Caller's Balance
+    dup4 sload          // [to.data, total_supply, total_supply.slot, amount, to]
+    dup4 add            // [to.data', total_supply, total_supply.slot, amount, to]
+    dup5 sstore         // [total_supply, total_supply.slot, amount, to]
+
+    // -- Update Total Supply
+    dup3                // [amount, total_supply, total_supply.slot, amount, to]
+    add                 // [total_supply', total_supply.slot, amount, to]
+    swap1 sstore        // [amount, to]
+
+    // -- Emit Transfer Event
+    <zero> mstore       // [to]
+    <zero> __EVENT_HASH(Transfer)
+    //                     [Transfer.sig, 0, to]
+    0x20 <zero> log3    // []
+
+    stop
 }
 
 #define macro BURN_FROM_CALLER(zero) = takes(1) returns(0) {
@@ -349,11 +393,13 @@
 
     // -- Update Balance
     dup1                  // [amount, amount]
-    caller sload          // [msg.sender.bal, amount, amount]
-    dup1 dup3             // [amount, msg.sender.bal, msg.sender.bal, amount, amount]
+    caller sload          // [msg.sender.data, amount, amount]
+    dup1                  // [msg.sender.data, msg.sender.data, amount, amount]
+    [BALANCE_MASK] and    // [msg.sender.bal, msg.sender.data, amount, amount]
+    dup3                  // [amount, msg.sender.bal, msg.sender.data, amount, amount]
     gt insufficient_bal_error jumpi
-    //                       [msg.sender.bal, amount, amount]
-    sub                   // [msg.sender.bal', amount]
+    //                       [msg.sender.data, amount, amount]
+    sub                   // [msg.sender.data', amount]
     caller sstore         // [amount]
 
     // -- Update Total Supply
@@ -376,16 +422,15 @@
     dup1                             // [amount, amount]
     BURN_FROM_CALLER(<zero>)         // [amount]
     SEND_ETH_TO_CALLER(<zero>, 0x00) // []
-    RETURN_TRUE(0x00)             // []
+    stop
 }
 
 #define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload             // [recipient]
-    dup1 REQUIRE_ADDRESS()        // [recipient]
+    0x04 LOAD_ADDRESS()           // [recipient]
     0x24 calldataload             // [amount, recipient]
     dup1 BURN_FROM_CALLER(<zero>) // [amount, recipient]
     SEND_ETH(<zero>, 0x00)
-    RETURN_TRUE(0x00)
+    stop
 }
 
 #define macro BURN_FROM(zero) = takes(2) returns(0) {
@@ -393,11 +438,13 @@
 
     // -- Update Balance
     dup1                  // [amount, amount, from]
-    dup3 sload            // [from.bal, amount, amount, from]
-    dup1 dup3             // [amount, from.bal, from.bal, amount, amount, from]
+    dup3 sload            // [from.data, amount, amount, from]
+    dup1                  // [from.data, from.data, amount, amount]
+    [BALANCE_MASK] and    // [from.bal, from.data, amount, amount]
+    dup3                  // [amount, from.bal, from.data, amount, amount]
     gt insufficient_bal_error jumpi
-    //                       [from.bal, amount, amount, from]
-    sub                   // [from.bal', amount, from]
+    //                       [from.data, amount, amount, from]
+    sub                   // [from.data', amount, from]
     dup3 sstore           // [amount, from]
 
     // -- Update Total Supply
@@ -420,13 +467,12 @@
 
     BURN_FROM(<zero>)                   // [amount]
     SEND_ETH_TO_CALLER(<zero>, <zero2>) // []
-    RETURN_TRUE(<zero2>)
+    stop
 }
 
 #define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     0x24 calldataload       // [amount]
-    0x04 calldataload       // [from, amount]
-    dup1 REQUIRE_ADDRESS()  // [from, amount]
+    0x04 LOAD_ADDRESS()     // [from, amount]
     dup2                    // [amount, from, amount]
 
     USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
@@ -442,14 +488,14 @@
 
     BURN_FROM(<zero>)                   // [amount, to]
     SEND_ETH(<zero>, <zero2>)           // []
-    RETURN_TRUE(<zero2>)
+    stop
 }
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
     0x24 calldataload       // [to]
     0x44 calldataload       // [amount, to]
     0x04 calldataload       // [from, amount, to]
-    dup3 dup2 REQUIRE_ADDRESS()
+    dup3 dup2 or REQUIRE_ADDRESS()
     //                         [from, amount, to]
     dup2                    // [amount, from, amount, to]
 
@@ -459,6 +505,22 @@
     withdraw_from_to_allowed_2pop:
         pop pop             // [amount, from, amount, to]
         WITHDRAW_FROM_TO_END(<zero>, 0x00)
+}
+
+#define macro IS_FORK() = takes(0) returns(1) {
+    [MAINNET_CHAIN_ID] chainid sub
+}
+
+#define macro _DOMAIN_SEPARATOR_EXTERNAL(zero) = takes(0) returns(0) {
+    IS_FORK() BRANCHLESS_ASSERT_ZERO()
+    [CACHED_DOMAIN_SEPARATOR] RETURN_WORD(<zero>)
+}
+
+#define macro _NONCES_EXTERNAL(zero) = takes(0) returns(0) {
+    0x04 LOAD_ADDRESS() // [account]
+    sload               // [account.data]
+    [NONCE_SHIFT] shr   // [account.nonce]
+    RETURN_WORD(<zero>)
 }
 
 #define jumptable__packed FN_TABLE {
@@ -519,6 +581,7 @@
         _DEPOSIT_TO_EXTERNAL(<zero>)
     depositAmountTo_dest:
         dup1 __FUNC_SIG(depositAmountTo)    sub no_selector_match jumpi
+        _DEPOSIT_AMOUNT_TO_EXTERNAL(<zero>)
     depositAmount_dest:
         dup1 __FUNC_SIG(depositAmount)      sub no_selector_match jumpi
         _DEPOSIT_AMOUNT_EXTERNAL(<zero>)
@@ -536,8 +599,10 @@
         _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
     DOMAIN_SEPARATOR_dest:
         dup1 __FUNC_SIG(DOMAIN_SEPARATOR)   sub no_selector_match jumpi
+        _DOMAIN_SEPARATOR_EXTERNAL(<zero>)
     nonces_dest:
         dup1 __FUNC_SIG(nonces)             sub no_selector_match jumpi
+        _NONCES_EXTERNAL(<zero>)
     permit_dest:
         dup1 __FUNC_SIG(permit)             sub no_selector_match jumpi
     multicall_dest:
@@ -556,6 +621,23 @@
     insufficent_free_balance_error:
         __FUNC_SIG(InsufficientFreeBalance) REVERT(<zero>)
 
+}
+
+#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
+    [ERC712_DOMAIN_HASH] <zero> mstore
+    [NAME_HASH]           0x20  mstore
+    [VERSION_HASH]        0x40  mstore
+    chainid               0x60  mstore
+    address               0x80  mstore
+    0xa0 <zero> sha3
+}
+
+#define macro CONSTRUCTOR() = takes(0) returns(0) {
+    // Check that placeholder domain separator was replaced and correctly computed
+        COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize) [CACHED_DOMAIN_SEPARATOR] sub
+        IS_FORK()
+    or
+    BRANCHLESS_ASSERT_ZERO()
 }
 
 #define macro MAIN() = takes(0) returns(0) {
