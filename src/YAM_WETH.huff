@@ -12,20 +12,20 @@
 #define function symbol() view returns (string)
 #define function decimals() view returns (uint8)
 // ---- Functions -- Global
-#define function totalSupply() payable returns ()
+#define function totalSupply() view returns (uint256)
 // ---- Functions -- Transfer
-#define function transferFrom(address,address,uint256) payable returns ()
-#define function transfer(address, uint256) payable returns ()
-#define function balanceOf(address) payable returns ()
+#define function transferFrom(address,address,uint256) payable returns (bool)
+#define function transfer(address, uint256) payable returns (bool)
+#define function balanceOf(address) view returns (uint256)
 // ---- Functions -- Allowance
-#define function approve(address,uint256) payable returns ()
-#define function allowance(address, address) payable returns ()
+#define function approve(address,uint256) payable returns (bool)
+#define function allowance(address, address) view returns (uint256)
 // ---- Functions -- ERC2612 Permits
-#define function DOMAIN_SEPARATOR() payable returns ()
-#define function nonces(address) payable returns ()
+#define function DOMAIN_SEPARATOR() view returns (bytes32)
+#define function nonces(address) view returns (uint256)
 #define function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) payable returns ()
 // ---- Functions -- Utility
-#define function multicall(bytes[])deposit() payable returns ()
+#define function multicall(bytes[]) payable returns (bytes[])
 // ---- Functions -- Wrap
 #define function deposit() payable returns ()
 #define function depositTo(address) payable returns ()
@@ -35,7 +35,7 @@
 #define function withdraw(uint256) payable returns ()
 #define function withdrawTo(address, uint256) payable returns ()
 #define function withdrawFrom(address, uint256) payable returns ()
-#define function withdrawFromTo(address, address uint256) payable returns ()
+#define function withdrawFromTo(address, address, uint256) payable returns ()
 
 // ---- Events
 #define event Transfer(address indexed, address indexed, uint256)
