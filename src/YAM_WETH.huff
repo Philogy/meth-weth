@@ -2,6 +2,12 @@
 #define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 
+// -- Selector Switch Constants
+#define constant DEST_SEQ = 0x2fb000000000000059c00000000000006a300000000000009300
+#define constant S_MASK = 0x31c00000 // => 00110001110000000000000000000000
+#define constant S_SHIFT = 0x16 // 22
+#define constant DEST_MASK = 0x1f0
+
 // -- Base Contracts
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
@@ -533,8 +539,6 @@
     RETURN_WORD(<zero>)
 }
 
-#define jumptable__packed FN_TABLE {
-    depositAmountTo_dest nonces_dest withdrawFrom_dest deposit_dest depositAmount_dest symbol_dest no_selector_match withdraw_dest balanceOf_dest no_selector_match withdrawTo_dest decimals_dest name_dest no_selector_match no_selector_match no_selector_match no_selector_match approve_dest no_selector_match DOMAIN_SEPARATOR_dest withdrawFromTo_dest transferFrom_dest no_selector_match no_selector_match transfer_dest depositTo_dest permit_dest no_selector_match allowance_dest totalSupply_dest no_selector_match multicall_dest
 #define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 calldataload                // [owner]
     0x24 calldataload                // [spender, owner]
@@ -607,119 +611,127 @@
     BRANCHLESS_ASSERT_ZERO()
 }
 
+#define macro SELECTOR(zero) = takes(0) returns(1) {
+    <zero> calldataload 0xe0 shr
+}
+
+#define macro FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+    <selector> eq <final_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop
+}
+
+#define macro NO_MATCH() = takes(0) returns(0) {
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop stop stop stop stop stop stop
+}
+
+#define macro RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
+    calldatasize iszero <deposit_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop
 }
 
 #define macro _MAIN(zero) = takes(0) returns(0) {
-    <zero> calldataload // [cd[0]]
-    // -- store selector
-    dup1 msize mstore   // [cd[0]]
-    // -- store nonce (also clears non-selector calldata)
-    0x574 0x4 mstore
-    // jump label size
-    0x2                 // [2, cd[0]]
-    // -- get function index
-    msize <zero> sha3 0x3e and
-    //                     [function_index << 1, 2, cd[0]]
-    // -- load jump label
-    __tablestart(FN_TABLE) add
-    0x5e codecopy       // [cd[0]]
-    0xe0 shr            // [selector]
-    0x40 mload          // [jump_loc, selector]
-    // -- use jump label
+    // -- Selector Switch Head
+    // Since the switch is exactly 48 bytes large no padding is required
+    SELECTOR(<zero>)     // [sel]
+    [DEST_SEQ]          // [lab_seq, sel]
+    dup2 [S_MASK] and   // [unique_sel_bits, lab_seq, sel]
+    [S_SHIFT] shr       // [i, lab_seq, sel]
+    shr [DEST_MASK] and // [dest, sel]
     jump
 
-    name_dest:
-        dup1 __FUNC_SIG(name)               sub no_selector_match jumpi
-        _NAME_EXTERNAL(<zero>)
-    symbol_dest:
-        dup1 __FUNC_SIG(symbol)             sub no_selector_match jumpi
-        _SYMBOL_EXTERNAL(<zero>)
-    decimals_dest:
-        dup1 __FUNC_SIG(decimals)           sub no_selector_match jumpi
-        _DECIMALS_EXTERNAL(<zero>)
-    totalSupply_dest:
-        dup1 __FUNC_SIG(totalSupply)        sub no_selector_match jumpi
-        _TOTAL_SUPPLY_EXTERNAL(<zero>)
-    transferFrom_dest:
-        dup1 __FUNC_SIG(transferFrom)       sub no_selector_match jumpi
-        _TRANSFER_FROM_EXTERNAL(<zero>)
-    transfer_dest:
-        dup1 __FUNC_SIG(transfer)           sub no_selector_match jumpi
-        _TRANSFER_EXTERNAL(<zero>)
-    balanceOf_dest:
-        dup1 __FUNC_SIG(balanceOf)          sub no_selector_match jumpi
-        _BALANCE_OF_EXTERNAL(<zero>)
-    approve_dest:
-        dup1 __FUNC_SIG(approve)            sub no_selector_match jumpi
-        _APPROVE_EXTERNAL(<zero>)
-    allowance_dest:
-        dup1 __FUNC_SIG(allowance)          sub no_selector_match jumpi
-        _ALLOWANCE_EXTERNAL(<zero>)
-    deposit_dest:
-        dup1 __FUNC_SIG(deposit)            sub no_selector_match jumpi
-        _DEPOSIT_EXTERNAL(<zero>)
-    depositTo_dest:
-        dup1 __FUNC_SIG(depositTo)          sub no_selector_match jumpi
-        _DEPOSIT_TO_EXTERNAL(<zero>)
-    depositAmountTo_dest:
-        dup1 __FUNC_SIG(depositAmountTo)    sub no_selector_match jumpi
-        _DEPOSIT_AMOUNT_TO_EXTERNAL(<zero>)
-    depositAmount_dest:
-        dup1 __FUNC_SIG(depositAmount)      sub no_selector_match jumpi
-        _DEPOSIT_AMOUNT_EXTERNAL(<zero>)
-    withdraw_dest:
-        dup1 __FUNC_SIG(withdraw)           sub no_selector_match jumpi
-        _WITHDRAW_EXTERNAL(<zero>)
-    withdrawTo_dest:
-        dup1 __FUNC_SIG(withdrawTo)         sub no_selector_match jumpi
-        _WITHDRAW_TO_EXTERNAL(<zero>)
-    withdrawFrom_dest:
-        dup1 __FUNC_SIG(withdrawFrom)       sub no_selector_match jumpi
-        _WITHDRAW_FROM_EXTERNAL(<zero>)
-    withdrawFromTo_dest:
-        dup1 __FUNC_SIG(withdrawFromTo)     sub no_selector_match jumpi
-        _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
-    DOMAIN_SEPARATOR_dest:
-        dup1 __FUNC_SIG(DOMAIN_SEPARATOR)   sub no_selector_match jumpi
-        _DOMAIN_SEPARATOR_EXTERNAL(<zero>)
-    nonces_dest:
-        dup1 __FUNC_SIG(nonces)             sub no_selector_match jumpi
-        _NONCES_EXTERNAL(<zero>)
-    permit_dest:
-        dup1 __FUNC_SIG(permit)             sub no_selector_match jumpi
-    multicall_dest:
-        dup1 __FUNC_SIG(multicall)          sub no_selector_match jumpi
-    no_selector_match:
-        // `receive()` fallback method, skips to revert if any calldata was sent
-        calldatasize empty_revert jumpi
-        _DEPOSIT_EXTERNAL(<zero>)
-        empty_revert:
-            0x00 0x00 revert
+    // The `JUMPDEST` bytes will be at the positions of the label.
+    // Selector comparison necessary to protect against collisions with other functions.
+    dest_0x030: FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
+    dest_0x040: NO_MATCH()
+    dest_0x050: NO_MATCH()
+    dest_0x060: FUNC_CHECK(0x06fdde03, name_final_dest)
+    dest_0x070: FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0x080: NO_MATCH()
+    dest_0x090: FUNC_CHECK(0x095ea7b3, approve_final_dest)
+    dest_0x0a0: FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0x0b0: NO_MATCH()
+    dest_0x0c0: NO_MATCH()
+    dest_0x0d0: FUNC_CHECK(0x95d89b41, symbol_final_dest)
+    dest_0x0e0: FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
+    dest_0x0f0: FUNC_CHECK(0x313ce567, decimals_final_dest)
+    dest_0x100: RECEIVE_CHECK(deposit_final_dest)
+    dest_0x110: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
+    dest_0x120: FUNC_CHECK(0x87f8ab26, depositAmount_final_dest)
+    dest_0x130: NO_MATCH()
+    dest_0x140: FUNC_CHECK(0xd0e30db0, deposit_final_dest)
+    dest_0x150: FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
+    dest_0x160: FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
+    dest_0x170: FUNC_CHECK(0xb760faf9, depositTo_final_dest)
+    dest_0x180: FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
+    dest_0x190: FUNC_CHECK(0xa9059cbb, transfer_final_dest)
+    dest_0x1a0: NO_MATCH()
+    dest_0x1b0: FUNC_CHECK(0xb2069e40, depositAmountTo_final_dest)
+    dest_0x1c0: FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
+    dest_0x1d0: FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0x1e0: FUNC_CHECK(0x70a08231, balanceOf_final_dest)
+    dest_0x1f0: FUNC_CHECK(0x7ecebe00, nonces_final_dest)
 
+    // Final function destinations.
+    name_final_dest:
+        _NAME_EXTERNAL(<zero>)
+    symbol_final_dest:
+        _SYMBOL_EXTERNAL(<zero>)
+    decimals_final_dest:
+        _DECIMALS_EXTERNAL(<zero>)
+    totalSupply_final_dest:
+        _TOTAL_SUPPLY_EXTERNAL(<zero>)
+    transferFrom_final_dest:
+        _TRANSFER_FROM_EXTERNAL(<zero>)
+    transfer_final_dest:
+        _TRANSFER_EXTERNAL(<zero>)
+    balanceOf_final_dest:
+        _BALANCE_OF_EXTERNAL(<zero>)
+    approve_final_dest:
+        _APPROVE_EXTERNAL(<zero>)
+    allowance_final_dest:
+        _ALLOWANCE_EXTERNAL(<zero>)
+    deposit_final_dest:
+        _DEPOSIT_EXTERNAL(<zero>)
+    depositTo_final_dest:
+        _DEPOSIT_TO_EXTERNAL(<zero>)
+    depositAmount_final_dest:
+        _DEPOSIT_AMOUNT_EXTERNAL(<zero>)
+    depositAmountTo_final_dest:
+        _DEPOSIT_AMOUNT_TO_EXTERNAL(<zero>)
+    withdraw_final_dest:
+        _WITHDRAW_EXTERNAL(<zero>)
+    withdrawTo_final_dest:
+        _WITHDRAW_TO_EXTERNAL(<zero>)
+    withdrawFrom_final_dest:
+        _WITHDRAW_FROM_EXTERNAL(<zero>)
+    withdrawFromTo_final_dest:
+        _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
+    DOMAIN_SEPARATOR_final_dest:
+        _DOMAIN_SEPARATOR_EXTERNAL(<zero>)
+    nonces_final_dest:
+        _NONCES_EXTERNAL(<zero>)
+    permit_final_dest:
+        _PERMIT_EXTERNAL(<zero>)
+    multicall_final_dest:
+        _MULTICALL_EXTERNAL(<zero>)
+
+    // Errors.
     insufficient_bal_error:
-        __FUNC_SIG(InsufficientBalance) REVERT(<zero>)
+        __FUNC_SIG(InsufficientBalance)     REVERT(<zero>)
     insufficient_allowance_error:
-        __FUNC_SIG(InsufficientAllowance) REVERT(<zero>)
+        __FUNC_SIG(InsufficientAllowance)   REVERT(<zero>)
     insufficent_free_balance_error:
         __FUNC_SIG(InsufficientFreeBalance) REVERT(<zero>)
-
-}
-
-#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
-    [ERC712_DOMAIN_HASH] <zero> mstore
-    [NAME_HASH]           0x20  mstore
-    [VERSION_HASH]        0x40  mstore
-    chainid               0x60  mstore
-    address               0x80  mstore
-    0xa0 <zero> sha3
-}
-
-#define macro CONSTRUCTOR() = takes(0) returns(0) {
-    // Check that placeholder domain separator was replaced and correctly computed
-        COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize) [CACHED_DOMAIN_SEPARATOR] sub
-        IS_FORK()
-    or
-    BRANCHLESS_ASSERT_ZERO()
+    permit_expired_error:
+        __FUNC_SIG(PermitExpired)           REVERT(<zero>)
+    invalid_signature_error:
+        __FUNC_SIG(InvalidSignature)        REVERT(0x00)
 }
 
 #define macro MAIN() = takes(0) returns(0) {
