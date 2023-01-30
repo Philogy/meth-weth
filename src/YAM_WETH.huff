@@ -1,11 +1,14 @@
 // -- Base constants
+#define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
+#define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+
+// -- Base Contracts
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
 #define constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532
 #define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
 #define constant NONCE_SHIFT = 0x80
-#define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
-#define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define constant NONCE_INCREMENT = 0x0100000000000000000000000000000000
 #define constant DECIMALS = 0x12 // 18
 
 // -- ABI Constants
@@ -48,6 +51,8 @@
 #define error InsufficientBalance()
 #define error InsufficientAllowance()
 #define error InsufficientFreeBalance()
+#define error PermitExpired()
+#define error InvalidSignature()
 
 // -- ERC712 Constants
 // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
@@ -55,6 +60,9 @@
 #define constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76
 #define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
 #define constant CACHED_DOMAIN_SEPARATOR = 0xd00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d001
+
+// keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
+#define constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
 
 
 // -- Utility Functions
@@ -272,7 +280,7 @@
         //                  [amount, from, to]
         TRANSFER_FROM_END(<zero>)
     transfer_from_allowed_2pop:
-        //                [allowance, allowance.slot, amount, from, to]
+        //                [_, _, amount, from, to]
         pop pop        // [amount, from, to]
         TRANSFER_FROM_END(<zero>)
 }
@@ -479,6 +487,7 @@
         //                     [amount, from, amount]
         WITHDRAW_FROM_END(<zero>, 0x00)
     withdraw_from_allowed_2pop:
+        //                     [_, _, amount, from, amount]
         pop pop             // [amount, from, amount]
         WITHDRAW_FROM_END(<zero>, 0x00)
 }
@@ -503,6 +512,7 @@
         //                     [amount, from, amount, to]
         WITHDRAW_FROM_TO_END(<zero>, 0x00)
     withdraw_from_to_allowed_2pop:
+        //                     [_, _, amount, from, amount, to]
         pop pop             // [amount, from, amount, to]
         WITHDRAW_FROM_TO_END(<zero>, 0x00)
 }
@@ -525,6 +535,78 @@
 
 #define jumptable__packed FN_TABLE {
     depositAmountTo_dest nonces_dest withdrawFrom_dest deposit_dest depositAmount_dest symbol_dest no_selector_match withdraw_dest balanceOf_dest no_selector_match withdrawTo_dest decimals_dest name_dest no_selector_match no_selector_match no_selector_match no_selector_match approve_dest no_selector_match DOMAIN_SEPARATOR_dest withdrawFromTo_dest transferFrom_dest no_selector_match no_selector_match transfer_dest depositTo_dest permit_dest no_selector_match allowance_dest totalSupply_dest no_selector_match multicall_dest
+#define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
+    0x04 calldataload                // [owner]
+    0x24 calldataload                // [spender, owner]
+    dup2 dup2 or REQUIRE_ADDRESS()
+    0x44 calldataload                // [allowance, spender, owner]
+    0x64 calldataload                // [deadline, allowance, spender, owner]
+
+    dup1 timestamp gt                // [block.timestamp > deadline, deadline, allowance, spender, owner]
+    permit_expired_error jumpi       // [deadline, allowance, spender, owner]
+
+    // -- Prepare Basic Permit Params
+    [PERMIT_TYPE_HASH] <zero> mstore // [deadline, allowance, spender, owner]
+    dup4                0x20  mstore // [deadline, allowance, spender, owner]
+    dup3                0x40  mstore // [deadline, allowance, spender, owner]
+    dup2                0x60  mstore // [deadline, allowance, spender, owner]
+    /***/               0xa0  mstore // [allowance, spender, owner]
+
+    // -- Prepare and Update Nonce
+    dup3 sload                       // [owner.data, allowance, spender, owner]
+    dup1 [NONCE_SHIFT] shr           // [owner.nonce, owner.data, allowance, spender, owner]
+    /***/               0x80  mstore // [owner.data, allowance, spender, owner]
+    [NONCE_INCREMENT] add            // [owner.data', allowance, spender, owner]
+    dup4 sstore                      // [allowance, spender, owner]
+
+    // -- Update Allowance
+    0x40 0x20 sha3                   // [allowance.slot, allowance, spender, owner]
+    sstore                           // [spender, owner]
+    dup2 __EVENT_HASH(Approval)      // [Approval.sig, owner, spender, owner]
+    0x20 0x60 log3                   // [owner]
+
+    // -- Calculate Message Hash
+    0xc0 <zero> sha3                 // [permit_struct_hash, owner]
+    0x1901 <zero> mstore             // [permit_struct_hash, owner]
+    [CACHED_DOMAIN_SEPARATOR] 0x20 mstore
+    //                                  [permit_struct_hash, owner]
+    0x40 mstore                      // [owner]
+    0x42 0x1e sha3                   // [encoded_struct, owner]
+
+    // -- Verify Signature
+    <zero> mstore                    // [owner]
+    // Copy v, r, s at once into memory.
+    0x60 0x84 0x20 calldatacopy      // [owner]
+
+    0x20 <zero> 0x80 <zero>          // [0, 0x80, 0, 0x20, owner]
+    chainid gas staticcall           // [success, owner]
+    pop                              // [owner]
+    <zero> mload                     // [recovered_signer, owner]
+    sub                              // [owner != recovered_signer]
+    // Revert if fork or signature didn't match.
+    // If `ecrecover` fails message hash in 0x00 is not overwritten, successful bypass would
+    // require collision between owner address and the encoded struct hash.
+    IS_FORK() or invalid_signature_error jumpi
+    //                                  []
+    stop
+}
+#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
+    [ERC712_DOMAIN_HASH] <zero> mstore
+    [NAME_HASH]           0x20  mstore
+    [VERSION_HASH]        0x40  mstore
+    chainid               0x60  mstore
+    address               0x80  mstore
+    0xa0 <zero> sha3
+}
+
+#define macro CONSTRUCTOR() = takes(0) returns(0) {
+    // Check that placeholder domain separator was replaced and correctly computed
+        COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize) [CACHED_DOMAIN_SEPARATOR] sub
+        IS_FORK()
+    or
+    BRANCHLESS_ASSERT_ZERO()
+}
+
 }
 
 #define macro _MAIN(zero) = takes(0) returns(0) {
