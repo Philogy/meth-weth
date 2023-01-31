@@ -351,7 +351,7 @@ contract YAM_WETH is IYAM_WETH, Multicallable {
             let depositAmount := sub(selfbalance(), prevTotalSupply)
 
             // Check if recipient is zero-address and if somehow total balance is above 2**96 - 1,
-            // would require 79.2B ETH. May be possible on other chains with higher balance.
+            // would require 79.2B ETH. May be possible on other chains with higher total supply.
             returndatacopy(returndatasize(), returndatasize(), or(iszero(_to), gt(selfbalance(), BALANCE_MASK)))
 
             sstore(TOTAL_SUPPLY_SLOT, selfbalance())
