@@ -1,6 +1,7 @@
 // -- Base constants
 #define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
 
 // -- Selector Switch Constants
 #define constant S_SHIFT = 0x14 // 20
@@ -75,19 +76,31 @@
     returndatasize returndatasize returndatacopy
 }
 
-#define macro REQUIRE_ADDRESS() = takes(1) returns(0) {
-    // takes:        [addr]
-    dup1 0xffffffffffffffffffffffffffffffffffffffff and  // [uint160(addr), addr]
-    dup2 iszero                                          // [addr == 0, uint160(addr), addr]
-    swap2 sub                                            // [uint160(addr) - addr, addr == 0]
-    or BRANCHLESS_ASSERT_ZERO()
+#define macro REQUIRE_ADDRESS1() = takes(1) returns(1) {
+    // takes:         [addr]
+    dup1 iszero    // [addr == 0, addr]
+    dup2 dup1      // [addr, addr, addr == 0, addr]
+    [MAX_ADDR] and // [uint160(addr), addr, addr == 0, addr]
+    sub or BRANCHLESS_ASSERT_ZERO()
+    // returns:       [addr]
+}
+
+#define macro REQUIRE_ADDRESS2() = takes(2) returns(2) {
+    // takes:              [addr1, addr2]
+    dup2 iszero         // [addr2 == 0, addr1, addr2]
+    dup2 iszero         // [addr1 == 0, addr2 == 0, addr1, addr2]
+    dup4 dup4 or        // [agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
+    dup1 [MAX_ADDR] and // [uint160(agg_addr), agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
+    sub                 // [uint160(agg_addr) != agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
+    or or BRANCHLESS_ASSERT_ZERO()
+    // returns:            [addr1, addr2]
 }
 
 #define macro LOAD_ADDRESS() = takes(1) returns(1) {
     // takes:         [calldata_pos]
     calldataload   // [addr]
-    dup1 REQUIRE_ADDRESS()
-    // returns:    // [addr] 
+    REQUIRE_ADDRESS1()
+    // returns:    // [addr]
 }
 
 #define macro REVERT(zero) = takes(1) returns(0) {
@@ -95,14 +108,14 @@
     0x04 0x1c return
 }
 
-#define macro RETURN_WORD(zero) = takes(1) returns(0) {
-    // takes:             [x]
-    <zero> mstore      // []
-    0x20 <zero> return // []
+#define macro RETURN_WORD(zero, word_size) = takes(1) returns(0) {
+    // takes:                    [x]
+    <zero> mstore             // []
+    <word_size> <zero> return // []
 }
 
-#define macro RETURN_TRUE(zero) = takes(0) returns(0) {
-    0x1 RETURN_WORD(<zero>)
+#define macro RETURN_TRUE(zero, word_size) = takes(0) returns(0) {
+    0x1 RETURN_WORD(<zero>, <word_size>)
 }
 
 #define macro BUBBLE_REVERT(zero) = takes(1) returns(0) {
@@ -158,11 +171,11 @@
 }
 
 #define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
-    [DECIMALS] RETURN_WORD(<zero>)
+    [DECIMALS] RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
-    [TOTAL_SUPPLY_SLOT] sload RETURN_WORD(<zero>)
+    [TOTAL_SUPPLY_SLOT] sload RETURN_WORD(<zero>, msize)
 }
 
 #define macro LOAD_BALANCE() = takes(1) returns(1) {
@@ -173,7 +186,7 @@
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 LOAD_ADDRESS()     // [account]
     LOAD_BALANCE()          // [account.bal]
-    RETURN_WORD(<zero>)
+    RETURN_WORD(<zero>, msize)
 }
 
 #define macro TRANSFER(zero) = takes(5) returns(0) {
@@ -210,7 +223,7 @@
     dup1 caller         // [msg.sender, amount, amount, msg.sender, to]
     TRANSFER(<zero>)
 
-    RETURN_TRUE(<zero>)
+    RETURN_TRUE(<zero>, msize)
 }
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
@@ -219,8 +232,8 @@
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
-    caller <zero> mstore   // [amount, spender]
-    dup2    0x20  mstore   // [amount, spender]
+    caller msize  mstore   // [amount, spender]
+    dup2   msize  mstore   // [amount, spender]
     dup1                   // [amount, amount, spender]
     0x40 <zero> sha3       // [allowance.slot, amount, amount, spender]
     sstore                 // [amount, spender]
@@ -231,53 +244,51 @@
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
     0x20 <zero> log3       // []
 
-    RETURN_TRUE(<zero>)
+    RETURN_TRUE(<zero>, 0x20)
 }
 
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload // [owner]
-    0x24 calldataload // [spender, owner]
-    dup2 dup2 or REQUIRE_ADDRESS()
-     0x20  mstore     // [owner]
-    <zero> mstore     // []
-    0x40 <zero> sha3  // [allowance.slot]
-    sload             // [allowance]
-    <zero> mstore     // []
-    0x20 <zero> return
+    0x24 calldataload  // [spender]
+    0x04 calldataload  // [owner, spender]
+    REQUIRE_ADDRESS2() // [owner, spender]
+    msize mstore       // [owner]
+    msize mstore       // []
+    msize <zero> sha3  // [allowance.slot]
+    sload              // [allowance]
+    RETURN_WORD(<zero>, 0x20)
 }
 
 
 // Actually "returns" 4 if jumping to `use_allowance_2pop`
 /// @dev Checks and updates `from`'s allowance to caller
 #define macro USE_ALLOWANCE(zero, use_allowance_2pop) = takes(2) returns(2) {
-    // takes:             [amount, from]
-    dup2 <zero> mstore // [amount, from]
-    caller 0x20 mstore // [amount, from]
-    0x40 <zero> sha3   // [allowance.slot, amount, from]
-    dup1 sload         // [allowance, allowance.slot, amount, from]
+    // takes:               [amount, from]
+    dup2   msize  mstore // [amount, from]
+    caller msize  mstore // [amount, from]
+    msize  <zero> sha3   // [allowance.slot, amount, from]
+    dup1 sload           // [allowance, allowance.slot, amount, from]
     dup1 [MAX_UINT] eq <use_allowance_2pop> jumpi
-    //                    [allowance, allowance.slot, amount, from]
-    dup1 dup4          // [amount, allowance, allowance, allowance.slot, amount, from]
+    //                      [allowance, allowance.slot, amount, from]
+    dup1 dup4            // [amount, allowance, allowance, allowance.slot, amount, from]
     gt insufficient_allowance_error jumpi
-    //                    [allowance, allowance.slot, amount, from]
-    dup3 swap1 sub     // [allowance', allowance.slot, amount, from]
-    swap1 sstore       // [amount, from]
+    //                      [allowance, allowance.slot, amount, from]
+    dup3 swap1 sub       // [allowance', allowance.slot, amount, from]
+    swap1 sstore         // [amount, from]
 }
 
 #define macro TRANSFER_FROM_END(zero) = takes(3) returns(0) {
     // takes:             [amount, from, to]
     dup1 dup3          // [from, amount, amount, from, to]
     TRANSFER(<zero>)   // []
-    RETURN_TRUE(<zero>)
+    RETURN_TRUE(<zero>, 0x20)
 }
 
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Do Param Verification
     0x24 calldataload  // [to]
     0x04 calldataload  // [from, to]
+    REQUIRE_ADDRESS2() // [from, to]
     0x44 calldataload  // [amount, from, to]
-    dup3 dup3 or REQUIRE_ADDRESS()
-    //                    [amount, from, to]
 
     // -- Verify Allowance
     USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
@@ -302,7 +313,7 @@
     <zero> mstore       // [total_supply.slot]
     caller <zero> __EVENT_HASH(Transfer)
     //                     [Transfer.sig, 0, msg.sender, total_supply.slot]
-    0x20 <zero> log3    // [total_supply.slot]
+    msize <zero> log3   // [total_supply.slot]
 
     // -- Update Total Supply
     selfbalance swap1   // [total_supply.slot, this.balance]
@@ -326,7 +337,7 @@
     <zero> mstore       // [total_supply.slot, recipient]
     swap1 <zero> __EVENT_HASH(Transfer)
     //                     [Transfer.sig, 0, recipient, total_supply.slot]
-    0x20 <zero> log3    // [total_supply.slot]
+    msize <zero> log3   // [total_supply.slot]
 
     // -- Update Total Supply
     selfbalance swap1   // [total_supply.slot, this.balance]
@@ -362,7 +373,7 @@
     <zero> mstore       // []
     caller <zero> __EVENT_HASH(Transfer)
     //                     [Transfer.sig, 0, msg.sender]
-    0x20 <zero> log3    // []
+    msize <zero> log3   // []
 
     stop
 }
@@ -395,7 +406,7 @@
     <zero> mstore       // [to]
     <zero> __EVENT_HASH(Transfer)
     //                     [Transfer.sig, 0, to]
-    0x20 <zero> log3    // []
+    msize <zero> log3   // []
 
     stop
 }
@@ -424,7 +435,7 @@
     <zero> mstore         // [amount]
     <zero> caller __EVENT_HASH(Transfer)
     //                       [Transfer.sig, msg.sender, 0]
-    0x20 <zero> log3      // []
+    msize <zero> log3     // []
 
     // returns:              []
 }
@@ -506,10 +517,10 @@
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
     0x24 calldataload       // [to]
-    0x44 calldataload       // [amount, to]
-    0x04 calldataload       // [from, amount, to]
-    dup3 dup2 or REQUIRE_ADDRESS()
-    //                         [from, amount, to]
+    0x04 calldataload       // [from, to]
+    REQUIRE_ADDRESS2()      // [from, to]
+    0x44 calldataload       // [amount, from, to]
+    swap1                   // [from, amount, to]
     dup2                    // [amount, from, amount, to]
 
     USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
@@ -527,20 +538,20 @@
 
 #define macro _DOMAIN_SEPARATOR_EXTERNAL(zero) = takes(0) returns(0) {
     IS_FORK() BRANCHLESS_ASSERT_ZERO()
-    [CACHED_DOMAIN_SEPARATOR] RETURN_WORD(<zero>)
+    [CACHED_DOMAIN_SEPARATOR] RETURN_WORD(<zero>, msize)
 }
 
 #define macro _NONCES_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 LOAD_ADDRESS() // [account]
     sload               // [account.data]
     [NONCE_SHIFT] shr   // [account.nonce]
-    RETURN_WORD(<zero>)
+    RETURN_WORD(<zero>, msize)
 }
 
 #define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 calldataload                // [owner]
     0x24 calldataload                // [spender, owner]
-    dup2 dup2 or REQUIRE_ADDRESS()
+    REQUIRE_ADDRESS2()               // [spender, owner]
     0x44 calldataload                // [allowance, spender, owner]
     0x64 calldataload                // [deadline, allowance, spender, owner]
 
