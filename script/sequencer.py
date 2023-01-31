@@ -160,6 +160,52 @@ def main_prep_seq():
             print(f'    {dest}: FUNC_CHECK(0x{sel:08x}, {final_dest_label})')
 
 
+def main_prep_code_61():
+    indices = {
+        x & MASK
+        for x in range(MASK + 1)
+    }
+    ind_to_fn = dict()
+    for sel, fn in zip(SELECTORS, SIGS):
+        ind = (sel >> S_SHIFT) & MASK
+        ind_to_fn[ind] = (sel, fn)
+
+    for ind in sorted(indices):
+        sel, fn = ind_to_fn.get(ind, (None, None))
+
+        if sel is not None:
+            print(f'0x{sel:08x} (0x{(sel >> S_SHIFT) & MASK:03x}): {fn}')
+
+    for ind in sorted(indices):
+        dest = f'dest_0x{(ind << 4) + 0x13:03x}'
+        sel, fn = ind_to_fn.get(ind, (None, None))
+        if fn is None:
+            print(f'    {dest}: NO_MATCH()')
+        elif fn == 'receive()':
+            print(f'    {dest}: RECEIVE_CHECK(deposit_final_dest)')
+        else:
+            final_dest_label = fn.split('(', 1)[0] + '_final_dest'
+            print(f'    {dest}: FUNC_CHECK(0x{sel:08x}, {final_dest_label})')
+
+
+def main_prep_code_55():
+    ind_to_fn = dict()
+    for sel, fn in zip(SELECTORS, SIGS):
+        ind = (sel >> 20) | 15
+        ind_to_fn[ind] = (sel, fn)
+
+    for ind in sorted({x | 15 for x in range(4096)}):
+        dest = f'dest_0x{ind:03x}'
+        sel, fn = ind_to_fn.get(ind, (None, None))
+        if fn is None:
+            print(f'    {dest}: NO_MATCH()')
+        elif fn == 'receive()':
+            print(f'    {dest}: RECEIVE_CHECK(deposit_final_dest)')
+        else:
+            final_dest_label = fn.split('(', 1)[0] + '_final_dest'
+            print(f'    {dest}: FUNC_CHECK(0x{sel:08x}, {final_dest_label})')
+
+
 def main_find_seq():
     indices = set()
     vmap = dict()
@@ -239,4 +285,5 @@ def main_find_seq():
 
 
 if __name__ == '__main__':
-    main_prep_seq()
+    # main_prep_seq()
+    main_prep_code_55()

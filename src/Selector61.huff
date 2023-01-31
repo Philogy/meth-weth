@@ -1,0 +1,112 @@
+#define constant S_MASK = 0x31c00000 // => 00110001110000000000000000000000
+#define constant S_SHIFT = 0x14 // 18
+#define constant S_OFFSET = 0x13
+
+#define macro SELECTOR(zero) = takes(0) returns(1) {
+    <zero> calldataload 0xe0 shr
+}
+
+#define macro FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+    <selector> eq <final_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop
+}
+
+#define macro NO_MATCH() = takes(0) returns(0) {
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop stop stop stop stop stop stop
+}
+
+#define macro RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
+    calldatasize iszero <deposit_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop
+}
+
+#define macro PAD_32_BYTES() = takes(0) returns(0) {
+    stop stop stop stop stop stop stop stop
+    stop stop stop stop stop stop stop stop
+    stop stop stop stop stop stop stop stop
+    stop stop stop stop stop stop stop stop
+}
+
+#define macro INTRA_GROUP_PADDING() = takes(0) returns(0) {
+    // 4 x 7 x 32 = 0x380 (896) bytes of padding
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+    PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES() PAD_32_BYTES()
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    SELECTOR(pc)
+    dup1 [S_MASK] and
+    [S_SHIFT] shr
+    [S_OFFSET] add
+    jump
+
+    dest_0x013: RECEIVE_CHECK(deposit_final_dest)
+    dest_0x023: FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
+    dest_0x033: NO_MATCH()
+    dest_0x043: FUNC_CHECK(0x06fdde03, name_final_dest)
+    dest_0x053: NO_MATCH()
+    dest_0x063: FUNC_CHECK(0x095ea7b3, approve_final_dest)
+    dest_0x073: NO_MATCH()
+    dest_0x083: FUNC_CHECK(0x87f8ab26, depositAmount_final_dest)
+    INTRA_GROUP_PADDING()
+    dest_0x413: FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
+    dest_0x423: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
+    dest_0x433: NO_MATCH()
+    dest_0x443: FUNC_CHECK(0xd0e30db0, deposit_final_dest)
+    dest_0x453: FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0x463: FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
+    dest_0x473: NO_MATCH()
+    dest_0x483: FUNC_CHECK(0x95d89b41, symbol_final_dest)
+    INTRA_GROUP_PADDING()
+    dest_0x813: FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
+    dest_0x823: FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
+    dest_0x833: FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0x843: NO_MATCH()
+    dest_0x853: FUNC_CHECK(0xa9059cbb, transfer_final_dest)
+    dest_0x863: NO_MATCH()
+    dest_0x873: FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
+    dest_0x883: NO_MATCH()
+    INTRA_GROUP_PADDING()
+    dest_0xc13: FUNC_CHECK(0xb2069e40, depositAmountTo_final_dest)
+    dest_0xc23: FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0xc33: FUNC_CHECK(0x70a08231, balanceOf_final_dest)
+    dest_0xc43: FUNC_CHECK(0x7ecebe00, nonces_final_dest)
+    dest_0xc53: FUNC_CHECK(0x313ce567, decimals_final_dest)
+    dest_0xc63: FUNC_CHECK(0xb760faf9, depositTo_final_dest)
+    dest_0xc73: NO_MATCH()
+    dest_0xc83: NO_MATCH()
+
+    // Final function destinations
+    name_final_dest:
+    symbol_final_dest:
+    decimals_final_dest:
+    totalSupply_final_dest:
+    transferFrom_final_dest:
+    transfer_final_dest:
+    balanceOf_final_dest:
+    approve_final_dest:
+    allowance_final_dest:
+    deposit_final_dest:
+    depositTo_final_dest:
+    depositAmountTo_final_dest:
+    depositAmount_final_dest:
+    withdraw_final_dest:
+    withdrawTo_final_dest:
+    withdrawFrom_final_dest:
+    withdrawFromTo_final_dest:
+    DOMAIN_SEPARATOR_final_dest:
+    nonces_final_dest:
+    permit_final_dest:
+    multicall_final_dest:
+}
