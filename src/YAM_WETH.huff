@@ -84,35 +84,11 @@
     // returns:       [addr_not_160bits]
 }
 
-#define macro ADDRESS_INVALID1() = takes(1) returns(2) {
-    // takes:        [addr]
-    dup1 iszero   // [addr == 0, addr]
-    dup2          // [addr, addr == 0, addr]
-    NOT_160BITS() // [addr_not_160bits, addr == 0, addr]
-    or            // [addr_invalid, addr]
-    // returns:      [addr_invalid, addr]
-}
-
-#define macro ADDRESS_INVALID2() = takes(2) returns(3) {
-    // takes:        [addr1, addr2]
-    dup2 dup2     // [addr1, addr2, addr1, addr2]
-    and iszero    // [!(addr1 && addr2), addr1, addr2]
-    dup3 dup3 or  // [agg_addr_bits, !(addr1 && addr2), addr1, addr2]
-    NOT_160BITS() // [addrs_not_160bits, !(addr1 && addr2), addr1, addr2]
-    or            // [addrs_invalid, addr1, addr2]
-    // returns:      [addrs_invalid, addr1, addr2]
-}
-
-// Check if calldatasize is below some size.
-#define macro CDZ_BELOW_MIN(min_calldata_size) = takes(0) returns(1) {
-    <min_calldata_size> calldatasize lt
-    // returns: [is_below_min]
-}
-
 #define macro LOAD_ADDRESS() = takes(1) returns(1) {
     // takes:             [calldata_pos]
     calldataload       // [addr]
-    ADDRESS_INVALID1() // [is_valid, addr]
+    dup1               // [addr, addr]
+    NOT_160BITS()      // [addr_not_160bits, addr]
     ASSERT_ZERO()      // [addr]
     // returns:        // [addr]
 }
@@ -219,19 +195,14 @@
 
 // ---- Transfer related methods
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 LOAD_ADDRESS()     // [account]
-    LOAD_BALANCE()          // [account.bal]
+    0x04 LOAD_ADDRESS() // [account]
+    LOAD_BALANCE()      // [account.bal]
     RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 calldataload   // [to]
-    ADDRESS_INVALID1()  // [to_invalid, to]
-    dup2 address eq or  // [to == address(this) || to_invalid, to]
-    CDZ_BELOW_MIN(0x44) // [cdz_below_min, to == address(this) || to_invalid, to]
-    callvalue or        // [msg.value || cdz_below_min, to == address(this) || to_invalid, to]
-    or ASSERT_ZERO()    // [to]
+    0x04 LOAD_ADDRESS() // [to]
     caller              // [msg.sender, to]
     0x24 calldataload   // [amount, msg.sender, to]
 
@@ -245,10 +216,6 @@
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
     0x04 calldataload      // [spender]
-    dup1 ADDRESS_INVALID1()
-    callvalue or
-    CDZ_BELOW_MIN(0x44) or
-    ASSERT_ZERO()
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
@@ -270,9 +237,7 @@
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
-    ADDRESS_INVALID2() // [addrs_invalid, owner, spender]
-    ASSERT_ZERO()      // [owner, spender]
-    msize mstore       // [owner]
+    msize mstore       // [spender]
     msize mstore       // []
     msize <zero> sha3  // [allowance.slot]
     sload              // [allowance]
@@ -306,13 +271,7 @@
 
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params.
-    0x24 calldataload   // [to]
-    dup1                // [to, to]
-    ADDRESS_INVALID1()  // [addrs_invalid, to]
-    dup2 address eq or  // [to == address(this) || addrs_invalid, to]
-    CDZ_BELOW_MIN(0x64) // [cdz_below_min, to == address(this) || addrs_invalid, to]
-    callvalue or        // [cdz_below_min, to == address(this) || addrs_invalid, to]
-    or ASSERT_ZERO()    // [to]
+    0x24 LOAD_ADDRESS() // [to]
     0x04 calldataload   // [from, to]
     0x44 calldataload   // [amount, from, to]
 
@@ -344,18 +303,12 @@
 
 #define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
     // Load & Verify Params.
-    0x04 calldataload       // [to]
-    ADDRESS_INVALID1()      // [to_invalid, to]
-    dup2 address eq         // [to == address(this), to_invalid, to]
-    or ASSERT_ZERO()        // [to]
-
+    0x04 LOAD_ADDRESS()     // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
     dup2 sstore             // [to]
-
     EMIT_DEPOSIT(<zero>, msize)
-
     stop
 }
 
@@ -384,7 +337,6 @@
 }
 
 #define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
-    callvalue ASSERT_ZERO()
     0x04 calldataload                // [amount]
     caller dup2                      // [amount, msg.sender, amount]
     BURN_FROM_CALLER(<zero>)         // [amount]
@@ -395,9 +347,6 @@
 #define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Validate Params.
     0x04 calldataload             // [to]
-    ADDRESS_INVALID1()            // [to_invalid, to]
-    CDZ_BELOW_MIN(0x44)           // [calldata_below_min, to_invalid, to]
-    callvalue or or ASSERT_ZERO() // [to]
     0x24 calldataload             // [amount, to]
     caller dup2                   // [amount, msg.sender, amount, to]
 
@@ -439,9 +388,6 @@
 
 #define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params.
-    callvalue               // [msg.value]
-    CDZ_BELOW_MIN(0x44) or  // [cdz_below_min || msg.value]
-    ASSERT_ZERO()           // []
     0x24 calldataload       // [amount]
     0x04 calldataload       // [from, amount]
     dup2                    // [amount, from, amount]
@@ -465,14 +411,6 @@
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
     // Load & Verify Params.
     0x24 calldataload       // [to]
-    dup1 ADDRESS_INVALID1() // [to == address(this), to]
-    dup2 address eq         // [to_invalid, to == address(this), to]
-    or                      // [to_invalid || to == address(this), to]
-    callvalue               // [msg.value, to_invalid || to == address(this), to]
-    CDZ_BELOW_MIN(0x64)     // [cdz_below_min, msg.value, to_invalid || to == address(this), to]
-    or or                   // [cdz_below_min || msg.value || to_invalid || to == address(this), to]
-    ASSERT_ZERO()           // [to]
-    // From does not need to be verified, if it's not a valid address allowance will always be zero.
     0x04 calldataload       // [from, to]
     <zero>                  // [0, from, to]
     0x44 calldataload       // [amount, 0, from, to]
@@ -509,8 +447,6 @@
 #define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
     0x04 calldataload               // [owner]
     0x24 calldataload               // [spender, owner]
-    ADDRESS_INVALID2()              // [addrs_invalid, spender, owner]
-    ASSERT_ZERO()                   // [spender, owner]
     0x44 calldataload               // [allowance, spender, owner]
     0x64 calldataload               // [deadline, allowance, spender, owner]
 
