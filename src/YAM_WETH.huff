@@ -11,6 +11,7 @@
 // -- Base Contracts
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 #define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
+#define constant NONCE_MASK = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
 #define constant NONCE_SHIFT = 0x80
 #define constant NONCE_INCREMENT = 0x0100000000000000000000000000000000
 #define constant DECIMALS = 0x12 // 18
@@ -42,6 +43,8 @@
 // ---- Functions -- Unwrap
 #define function withdraw(uint256) payable returns ()
 #define function withdrawTo(address, uint256) payable returns ()
+#define function withdrawAll() payable returns ()
+#define function withdrawAllTo(address) payable returns ()
 #define function withdrawFrom(address, uint256) payable returns ()
 #define function withdrawFromTo(address, address, uint256) payable returns ()
 
@@ -116,27 +119,15 @@
     no_bubble:
 }
 
-#define macro SEND_ETH_TO_CALLER(zero, zero2) = takes(1) returns(0) {
-    // takes:                      [amount]
-
-    <zero> <zero> <zero> <zero> // [0, 0, 0, 0, amount]
-    swap4 caller gas            // [gas, msg.sender, amount, 0, 0, 0, 0]
-    call                        // [success]
-    BUBBLE_REVERT(<zero2>)      // []
-
-    // returns:                    []
+#define macro PUSH_4_ZEROS(zero) = takes(0) returns(4) {
+    <zero> <zero> <zero> <zero>     // [0, 0, 0, 0]
 }
 
-#define macro SEND_ETH(zero, zero2) = takes(2) returns(0) {
-    // takes:        [amount, recipient]
-
-    <zero> <zero> // [0, 0, amount, recipient]
-    <zero>        // [0, 0, 0, amount, recipient]
-    swap3         // [amount, 0, 0, 0, recipient]
-    <zero>        // [0, amount, 0, 0, 0, recipient]
-    swap5         // [recipient, amount, 0, 0, 0, 0]
-    gas call      // [success]
-    BUBBLE_REVERT(<zero2>)
+#define macro SEND_ETH(zero) = takes(6) returns(0) {
+    // takes:                [recipient, amount, 0, 0, 0, 0]
+    gas call              // [success]
+    BUBBLE_REVERT(<zero>) // []
+    // returns:              []
 }
 
 // -- Internal Macros
@@ -166,6 +157,19 @@
     __EVENT_HASH(Transfer)
     //                         [Transfer.sig, from, to]
     <word_size> <zero> log3 // []
+}
+
+#define macro WITHDRAW_ALL(zero) = takes(0) returns(1) {
+    // takes:                          []
+    // -- Update balance.
+    caller sload                    // [msg.sender.data]
+    dup1 [NONCE_MASK] and           // [msg.sender.data', msg.sender.data]
+    caller sstore                   // [msg.sender.data]
+    // -- Get amount and emit event.
+    [BALANCE_MASK] and              // [amount]
+    caller dup2                     // [amount, caller, amount]
+    EMIT_WITHDRAWAL(<zero>, msize)  // [amount]
+    // returns:                        [amount]
 }
 
 // -- External Functions
@@ -337,94 +341,121 @@
 }
 
 #define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload                // [amount]
-    caller dup2                      // [amount, msg.sender, amount]
-    BURN_FROM_CALLER(<zero>)         // [amount]
-    SEND_ETH_TO_CALLER(<zero>, 0x00) // []
+    PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
+    0x04 calldataload        // [amount, 0, 0, 0, 0]
+    caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
+    BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
+    caller                   // [msg.sender, amount, 0, 0, 0, 0]
+    SEND_ETH(0x00)           // []
     stop
 }
 
 #define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    // -- Load & Validate Params.
-    0x04 calldataload             // [to]
-    0x24 calldataload             // [amount, to]
-    caller dup2                   // [amount, msg.sender, amount, to]
-
-    // -- Complete Withdraw.
-    dup1 BURN_FROM_CALLER(<zero>) // [amount, to]
-    SEND_ETH(<zero>, 0x00)        // []
+    // -- Setup stack.
+    PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
+    0x24 calldataload        // [amount, 0, 0, 0, 0]
+    caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
+    // -- Update balance and emit event.
+    BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
+    // -- Transfer ETH
+    0x04 calldataload        // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(0x00)           // []
     stop
 }
 
-#define macro BURN_FROM(zero) = takes(3) returns(0) {
-    // takes:                   [amount, from, 0]
+#define macro _WITHDRAW_ALL_EXTERNAL(zero) = takes(0) returns(0) {
+    // -- Setup stack.
+    PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
+    // -- Update balance and emit event.
+    WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
+    // -- Transfer ETH.
+    caller               // [msg.sender, amount, 0, 0, 0, 0]
+    SEND_ETH(0x00)       // []
+    stop
+}
+
+#define macro _WITHDRAW_ALL_TO_EXTERNAL(zero) = takes(0) returns(0) {
+    // -- Setup stack.
+    PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
+    // -- Update balance and emit event.
+    WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
+    // -- Transfer ETH.
+    0x04 calldataload    // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(0x00)       // []
+    stop
+}
+
+#define macro BURN_FROM(zero) = takes(2) returns(0) {
+    // takes:                   [amount, from]
 
     // -- Update Balance
-    dup1                     // [amount, amount, from, 0]
-    dup3 sload               // [from.data, amount, amount, from, 0]
-    dup1                     // [from.data, from.data, amount, amount, 0]
-    [BALANCE_MASK] and       // [from.bal, from.data, amount, amount, 0]
-    dup3                     // [amount, from.bal, from.data, amount, amount, 0]
+    dup1                     // [amount, amount, from]
+    dup3 sload               // [from.data, amount, amount, from]
+    dup1                     // [from.data, from.data, amount, amount]
+    [BALANCE_MASK] and       // [from.bal, from.data, amount, amount]
+    dup3                     // [amount, from.bal, from.data, amount, amount]
     gt insufficient_bal_error jumpi
-    //                          [from.data, amount, amount, from, 0]
-    sub                      // [from.data', amount, from, 0]
-    dup3 sstore              // [amount, from, 0]
+    //                          [from.data, amount, amount, from]
+    sub                      // [from.data', amount, from]
+    dup3 sstore              // [amount, from]
 
     // -- Emit Withdrawal
-    <zero> mstore            // [from, 0]
-    __EVENT_HASH(Withdrawal) // [Transfer.sig, from, 0]
+    <zero> mstore            // [from]
+    __EVENT_HASH(Withdrawal) // [Transfer.sig, from]
     0x20 <zero> log2         // []
 
     // returns:                 []
 }
 
-#define macro WITHDRAW_FROM(zero, zero2) = takes(3) returns(0) {
-    // takes:                              [amount, from, 0, amount]
+#define macro WITHDRAW_FROM(zero, zero2) = takes(7) returns(0) {
+    // takes:             [amount, from, amount, 0, 0, 0, 0]
 
-    BURN_FROM(<zero>)                   // [amount]
-    SEND_ETH_TO_CALLER(<zero>, <zero2>) // []
-    stop
+    BURN_FROM(<zero>)  // [amount, 0, 0, 0, 0]
+    caller             // [msg.sender, amount, 0, 0, 0, 0]
+    SEND_ETH(<zero>)   // []
 }
 
 #define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params.
-    0x24 calldataload       // [amount]
-    0x04 calldataload       // [from, amount]
-    dup2                    // [amount, from, amount]
+    PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
+    0x24 calldataload       // [amount, 0, 0, 0, 0]
+    0x04 calldataload       // [from, amount, 0, 0, 0, 0]
+    dup2                    // [amount, from, amount, 0, 0, 0, 0]
 
     USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
-        //                     [amount, from, amount]
+        //                     [amount, from, amount, 0, 0, 0, 0]
         WITHDRAW_FROM(<zero>, 0x00)
+        stop
     withdraw_from_allowed_2pop:
-        //                     [_, _, amount, from, amount]
-        pop pop             // [amount, from, amount]
+        //                     [_, _, amount, from, amount, 0, 0, 0, 0]
+        pop pop             // [amount, from, amount, 0, 0, 0, 0]
         WITHDRAW_FROM(<zero>, 0x00)
+        stop
 }
 
-#define macro WITHDRAW_FROM_TO(zero, zero2) = takes(4) returns(0) {
-    // takes:                    [amount, from, 0, amount, to]
+#define macro WITHDRAW_FROM_TO(zero, zero2) = takes(7) returns(0) {
+    // takes:                    [amount, from, amount, 0, 0, 0, 0]
 
-    BURN_FROM(<zero>)         // [amount, to]
-    SEND_ETH(<zero>, <zero2>) // []
+    BURN_FROM(<zero>)         // [amount, 0, 0, 0, 0]
+    0x24 calldataload         // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(0x00)            // []
 }
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
     // Load & Verify Params.
-    0x24 calldataload       // [to]
-    0x04 calldataload       // [from, to]
-    <zero>                  // [0, from, to]
-    0x44 calldataload       // [amount, 0, from, to]
-    swap2                   // [from, 0, amount, to]
-    dup3                    // [amount, from, 0, amount, to]
+    0x04 calldataload       // [from]
+    0x44 calldataload       // [amount, from]
+    swap2                   // [from, amount]
+    dup3                    // [amount, from, amount]
 
     USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
-        //                     [amount, from, 0, amount, to]
-        WITHDRAW_FROM_TO(<zero>, 0x00)
+        //                     [amount, from, amount]
+        WITHDRAW_FROM_TO(<zero>)
         stop
     withdraw_from_to_allowed_2pop:
-        //                     [_, _, amount, from, 0, amount, to]
-        pop pop             // [amount, from, 0, amount, to]
-        WITHDRAW_FROM_TO(<zero>, 0x00)
+        //                     [_, _, amount, from, amount]
+        pop pop             // [amount, from, amount]
+        WITHDRAW_FROM_TO(<zero>)
         stop
 }
 
@@ -685,7 +716,7 @@
     dest_0x82f: NO_MATCH()
     dest_0x83f: NO_MATCH()
     dest_0x84f: NO_MATCH()
-    dest_0x85f: NO_MATCH()
+    dest_0x85f: FUNC_CHECK(0x853828b6, withdrawAll_final_dest)
     dest_0x86f: NO_MATCH()
     dest_0x87f: NO_MATCH()
     dest_0x88f: NO_MATCH()
@@ -754,7 +785,7 @@
     dest_0xc7f: NO_MATCH()
     dest_0xc8f: NO_MATCH()
     dest_0xc9f: NO_MATCH()
-    dest_0xcaf: NO_MATCH()
+    dest_0xcaf: FUNC_CHECK(0xca9add8f, withdrawAllTo_final_dest)
     dest_0xcbf: NO_MATCH()
     dest_0xccf: NO_MATCH()
     dest_0xcdf: NO_MATCH()
@@ -836,6 +867,10 @@
         _WITHDRAW_EXTERNAL(<zero>)
     withdrawTo_final_dest:
         _WITHDRAW_TO_EXTERNAL(<zero>)
+    withdrawAll_final_dest:
+        _WITHDRAW_ALL_EXTERNAL(<zero>)
+    withdrawAllTo_final_dest:
+        _WITHDRAW_ALL_TO_EXTERNAL(<zero>)
     withdrawFrom_final_dest:
         _WITHDRAW_FROM_EXTERNAL(<zero>)
     withdrawFromTo_final_dest:
