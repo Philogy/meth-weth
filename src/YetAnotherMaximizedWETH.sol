@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.15;
 
-import {IYAM_WETH} from "./IYAM_WETH.sol";
 import {Multicallable} from "solady/utils/Multicallable.sol";
 
 /// @dev To ensure safety with multicall use of `msg.value` (`callvalue()`) is avoided, instead the
 /// available ETH that can be used is determine by the difference between the contract's balance and
 /// the total supply.
-contract YAM_WETH is IYAM_WETH, Multicallable {
+contract YAM_WETH is Multicallable {
     /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
     /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
     bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
