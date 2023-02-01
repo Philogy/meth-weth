@@ -1,4 +1,5 @@
 // -- Base constants
+// If changed for alternative chain, replace use of CHAINID in `permit`.
 #define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
@@ -46,6 +47,8 @@
 
 // ---- Events
 #define event Transfer(address indexed, address indexed, uint256)
+#define event Deposit(address indexed, uint256)
+#define event Withdrawal(address indexed, uint256)
 #define event Approval(address indexed, address indexed, uint256)
 
 // ---- Errors
@@ -57,6 +60,7 @@
 
 // -- ERC712 Constants
 // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+#define constant ERC712_ENCODE_HEAD = 0x1901
 #define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
 #define constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76
 #define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
@@ -67,36 +71,50 @@
 
 
 // -- Utility Functions
-#define macro BRANCHLESS_ASSERT_ZERO() = takes(1) returns(0) {
+#define macro ASSERT_ZERO() = takes(1) returns(0) {
     // takes:    [cond]
     returndatasize returndatasize returndatacopy
 }
 
-#define macro REQUIRE_ADDRESS1() = takes(1) returns(1) {
+#define macro NOT_160BITS() = takes(1) returns(1) {
     // takes:         [addr]
-    dup1 iszero    // [addr == 0, addr]
-    dup2 dup1      // [addr, addr, addr == 0, addr]
-    [MAX_ADDR] and // [uint160(addr), addr, addr == 0, addr]
-    sub or BRANCHLESS_ASSERT_ZERO()
-    // returns:       [addr]
+    dup1
+    [MAX_ADDR] and // [uint160(addr), addr]
+    sub            // [uint160(addr) != addr]
+    // returns:       [addr_not_160bits]
 }
 
-#define macro REQUIRE_ADDRESS2() = takes(2) returns(2) {
-    // takes:              [addr1, addr2]
-    dup2 iszero         // [addr2 == 0, addr1, addr2]
-    dup2 iszero         // [addr1 == 0, addr2 == 0, addr1, addr2]
-    dup4 dup4 or        // [agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
-    dup1 [MAX_ADDR] and // [uint160(agg_addr), agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
-    sub                 // [uint160(agg_addr) != agg_addr, addr1 == 0, addr2 == 0, addr1, addr2]
-    or or BRANCHLESS_ASSERT_ZERO()
-    // returns:            [addr1, addr2]
+#define macro ADDRESS_INVALID1() = takes(1) returns(2) {
+    // takes:        [addr]
+    dup1 iszero   // [addr == 0, addr]
+    dup2          // [addr, addr == 0, addr]
+    NOT_160BITS() // [addr_not_160bits, addr == 0, addr]
+    or            // [addr_invalid, addr]
+    // returns:      [addr_invalid, addr]
+}
+
+#define macro ADDRESS_INVALID2() = takes(2) returns(3) {
+    // takes:        [addr1, addr2]
+    dup2 dup2     // [addr1, addr2, addr1, addr2]
+    and iszero    // [!(addr1 && addr2), addr1, addr2]
+    dup3 dup3 or  // [agg_addr_bits, !(addr1 && addr2), addr1, addr2]
+    NOT_160BITS() // [addrs_not_160bits, !(addr1 && addr2), addr1, addr2]
+    or            // [addrs_invalid, addr1, addr2]
+    // returns:      [addrs_invalid, addr1, addr2]
+}
+
+// Check if calldatasize is below some size.
+#define macro CDZ_BELOW_MIN(min_calldata_size) = takes(0) returns(1) {
+    <min_calldata_size> calldatasize lt
+    // returns: [is_below_min]
 }
 
 #define macro LOAD_ADDRESS() = takes(1) returns(1) {
-    // takes:         [calldata_pos]
-    calldataload   // [addr]
-    REQUIRE_ADDRESS1()
-    // returns:    // [addr]
+    // takes:             [calldata_pos]
+    calldataload       // [addr]
+    ADDRESS_INVALID1() // [is_valid, addr]
+    ASSERT_ZERO()      // [addr]
+    // returns:        // [addr]
 }
 
 #define macro REVERT(zero) = takes(1) returns(0) {
@@ -120,10 +138,6 @@
         returndatasize <zero> <zero> returndatacopy
         returndatasize <zero> revert
     no_bubble:
-}
-
-#define macro NO_VALUE() = takes(0) returns(0) {
-    callvalue empty_revert jumpi
 }
 
 #define macro SEND_ETH_TO_CALLER(zero, zero2) = takes(1) returns(0) {
@@ -212,7 +226,12 @@
 
 #define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 LOAD_ADDRESS() // [to]
+    0x04 calldataload   // [to]
+    ADDRESS_INVALID1()  // [to_invalid, to]
+    dup2 address eq or  // [to == address(this) || to_invalid, to]
+    CDZ_BELOW_MIN(0x44) // [cdz_below_min, to == address(this) || to_invalid, to]
+    callvalue or        // [msg.value || cdz_below_min, to == address(this) || to_invalid, to]
+    or ASSERT_ZERO()    // [to]
     caller              // [msg.sender, to]
     0x24 calldataload   // [amount, msg.sender, to]
 
@@ -225,7 +244,11 @@
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 LOAD_ADDRESS()    // [spender]
+    0x04 calldataload      // [spender]
+    dup1 ADDRESS_INVALID1()
+    callvalue or
+    CDZ_BELOW_MIN(0x44) or
+    ASSERT_ZERO()
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
@@ -247,7 +270,8 @@
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
-    REQUIRE_ADDRESS2() // [owner, spender]
+    ADDRESS_INVALID2() // [addrs_invalid, owner, spender]
+    ASSERT_ZERO()      // [owner, spender]
     msize mstore       // [owner]
     msize mstore       // []
     msize <zero> sha3  // [allowance.slot]
@@ -281,11 +305,16 @@
 }
 
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
-    // -- Load & Do Param Verification
-    0x24 calldataload  // [to]
-    0x04 calldataload  // [from, to]
-    REQUIRE_ADDRESS2() // [from, to]
-    0x44 calldataload  // [amount, from, to]
+    // -- Load & Verify Params.
+    0x24 calldataload   // [to]
+    dup1                // [to, to]
+    ADDRESS_INVALID1()  // [addrs_invalid, to]
+    dup2 address eq or  // [to == address(this) || addrs_invalid, to]
+    CDZ_BELOW_MIN(0x64) // [cdz_below_min, to == address(this) || addrs_invalid, to]
+    callvalue or        // [cdz_below_min, to == address(this) || addrs_invalid, to]
+    or ASSERT_ZERO()    // [to]
+    0x04 calldataload   // [from, to]
+    0x44 calldataload   // [amount, from, to]
 
     // -- Verify Allowance
     USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
@@ -297,102 +326,110 @@
         TRANSFER_FROM_END(<zero>, 0x20)
 }
 
-#define macro DEPOSIT(zero) = takes(0) returns(0) {
-    caller sload            // [msg.sender.bal]
-    callvalue add           // [msg.sender.bal']
-    caller sstore           // []
-
-    // -- Emit Transfer
-    callvalue <zero> mstore // []
-    caller    <zero> __EVENT_HASH(Transfer)
-    //                         [Transfer.sig, 0, msg.sender]
-    msize <zero> log3       // []
+#define macro EMIT_DEPOSIT(zero, word_size) = takes(1) returns(0) {
+    // takes:                  [to]
+    callvalue <zero> mstore // [to]
+    __EVENT_HASH(Deposit)   // [Deposit.sig, to]
+    <word_size> <zero> log2 // []
 }
 
 #define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
-    DEPOSIT(<zero>)
-
+    caller sload            // [msg.sender.data]
+    // Would need 3.4 x 10^20 ETH to overflow into nonce.
+    callvalue add           // [msg.sender.data']
+    caller sstore           // []
+    caller EMIT_DEPOSIT(<zero>, msize)
     stop
 }
 
 #define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 LOAD_ADDRESS()     // [to]
+    // Load & Verify Params.
+    0x04 calldataload       // [to]
+    ADDRESS_INVALID1()      // [to_invalid, to]
+    dup2 address eq         // [to == address(this), to_invalid, to]
+    or ASSERT_ZERO()        // [to]
 
     dup1 sload              // [to.bal, to]
+    // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
     dup2 sstore             // [to]
 
-    // -- Emit Transfer
-    callvalue <zero> mstore // [to]
-    <zero> __EVENT_HASH(Transfer)
-    //                     [Transfer.sig, 0, to]
-    msize <zero> log3   // []
+    EMIT_DEPOSIT(<zero>, msize)
 
     stop
 }
 
-#define macro BURN_FROM_CALLER(zero) = takes(1) returns(0) {
-    // takes:                [amount]
+#define macro EMIT_WITHDRAWAL(zero, word_size) = takes(2) returns(0) {
+    // takes:                   [amount, from]
+    <zero> mstore            // [from]
+    __EVENT_HASH(Withdrawal) // [Withdrawal.sig, from]
+    <word_size> <zero> log2  // []
+}
+
+#define macro BURN_FROM_CALLER(zero) = takes(2) returns(0) {
+    // takes:                [amount, msg.sender]
 
     // -- Update Balance
-    dup1                  // [amount, amount]
-    caller sload          // [msg.sender.data, amount, amount]
-    dup1                  // [msg.sender.data, msg.sender.data, amount, amount]
-    [BALANCE_MASK] and    // [msg.sender.bal, msg.sender.data, amount, amount]
-    dup3                  // [amount, msg.sender.bal, msg.sender.data, amount, amount]
+    dup2                  // [amount, amount, msg.sender]
+    caller sload          // [msg.sender.data, amount, amount, msg.sender]
+    dup1                  // [msg.sender.data, msg.sender.data, amount, amount, msg.sender]
+    [BALANCE_MASK] and    // [msg.sender.bal, msg.sender.data, amount, amount, msg.sender]
+    dup3                  // [amount, msg.sender.bal, msg.sender.data, amount, amount, msg.sender]
     gt insufficient_bal_error jumpi
-    //                       [msg.sender.data, amount, amount]
-    sub                   // [msg.sender.data', amount]
-    caller sstore         // [amount]
+    //                       [msg.sender.data, amount, amount, msg.sender]
+    sub                   // [msg.sender.data', amount, msg.sender]
+    caller sstore         // [amount, msg.sender]
 
-    // -- Emit Transfer
-    <zero> mstore         // [amount]
-    <zero> caller __EVENT_HASH(Transfer)
-    //                       [Transfer.sig, msg.sender, 0]
-    msize <zero> log3     // []
-
-    // returns:              []
+    EMIT_WITHDRAWAL(<zero>, msize)
 }
 
 #define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
+    callvalue ASSERT_ZERO()
     0x04 calldataload                // [amount]
-    dup1                             // [amount, amount]
+    caller dup2                      // [amount, msg.sender, amount]
     BURN_FROM_CALLER(<zero>)         // [amount]
     SEND_ETH_TO_CALLER(<zero>, 0x00) // []
     stop
 }
 
 #define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 LOAD_ADDRESS()           // [recipient]
-    0x24 calldataload             // [amount, recipient]
-    dup1 BURN_FROM_CALLER(<zero>) // [amount, recipient]
-    SEND_ETH(<zero>, 0x00)
+    // -- Load & Validate Params.
+    0x04 calldataload             // [to]
+    ADDRESS_INVALID1()            // [to_invalid, to]
+    CDZ_BELOW_MIN(0x44)           // [calldata_below_min, to_invalid, to]
+    callvalue or or ASSERT_ZERO() // [to]
+    0x24 calldataload             // [amount, to]
+    caller dup2                   // [amount, msg.sender, amount, to]
+
+    // -- Complete Withdraw.
+    dup1 BURN_FROM_CALLER(<zero>) // [amount, to]
+    SEND_ETH(<zero>, 0x00)        // []
     stop
 }
 
 #define macro BURN_FROM(zero) = takes(3) returns(0) {
-    // takes:                 [amount, from, 0]
+    // takes:                   [amount, from, 0]
 
     // -- Update Balance
-    dup1                   // [amount, amount, from, 0]
-    dup3 sload             // [from.data, amount, amount, from, 0]
-    dup1                   // [from.data, from.data, amount, amount, 0]
-    [BALANCE_MASK] and     // [from.bal, from.data, amount, amount, 0]
-    dup3                   // [amount, from.bal, from.data, amount, amount, 0]
+    dup1                     // [amount, amount, from, 0]
+    dup3 sload               // [from.data, amount, amount, from, 0]
+    dup1                     // [from.data, from.data, amount, amount, 0]
+    [BALANCE_MASK] and       // [from.bal, from.data, amount, amount, 0]
+    dup3                     // [amount, from.bal, from.data, amount, amount, 0]
     gt insufficient_bal_error jumpi
-    //                        [from.data, amount, amount, from, 0]
-    sub                    // [from.data', amount, from, 0]
-    dup3 sstore            // [amount, from, 0]
+    //                          [from.data, amount, amount, from, 0]
+    sub                      // [from.data', amount, from, 0]
+    dup3 sstore              // [amount, from, 0]
 
-    // -- Emit Transfer
-    <zero> mstore          // [from, 0]
-    __EVENT_HASH(Transfer) // [Transfer.sig, from, 0]
-    0x20 <zero> log3       // []
+    // -- Emit Withdrawal
+    <zero> mstore            // [from, 0]
+    __EVENT_HASH(Withdrawal) // [Transfer.sig, from, 0]
+    0x20 <zero> log2         // []
 
-    // returns:               []
+    // returns:                 []
 }
 
-#define macro WITHDRAW_FROM_END(zero, zero2) = takes(4) returns(0) {
+#define macro WITHDRAW_FROM(zero, zero2) = takes(3) returns(0) {
     // takes:                              [amount, from, 0, amount]
 
     BURN_FROM(<zero>)                   // [amount]
@@ -401,32 +438,42 @@
 }
 
 #define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
+    // -- Load & Verify Params.
+    callvalue               // [msg.value]
+    CDZ_BELOW_MIN(0x44) or  // [cdz_below_min || msg.value]
+    ASSERT_ZERO()           // []
     0x24 calldataload       // [amount]
-    <zero>                  // [0, amount]
-    0x04 LOAD_ADDRESS()     // [from, 0, amount]
-    dup3                    // [amount, from, 0, amount]
+    0x04 calldataload       // [from, amount]
+    dup2                    // [amount, from, amount]
 
     USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
-        //                     [amount, from, 0, amount]
-        WITHDRAW_FROM_END(<zero>, 0x00)
+        //                     [amount, from, amount]
+        WITHDRAW_FROM(<zero>, 0x00)
     withdraw_from_allowed_2pop:
-        //                     [_, _, amount, from, 0, amount]
-        pop pop             // [amount, from, 0, amount]
-        WITHDRAW_FROM_END(<zero>, 0x00)
+        //                     [_, _, amount, from, amount]
+        pop pop             // [amount, from, amount]
+        WITHDRAW_FROM(<zero>, 0x00)
 }
 
-#define macro WITHDRAW_FROM_TO_END(zero, zero2) = takes(4) returns(0) {
+#define macro WITHDRAW_FROM_TO(zero, zero2) = takes(4) returns(0) {
     // takes:                    [amount, from, 0, amount, to]
 
     BURN_FROM(<zero>)         // [amount, to]
     SEND_ETH(<zero>, <zero2>) // []
-    stop
 }
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
+    // Load & Verify Params.
     0x24 calldataload       // [to]
+    dup1 ADDRESS_INVALID1() // [to == address(this), to]
+    dup2 address eq         // [to_invalid, to == address(this), to]
+    or                      // [to_invalid || to == address(this), to]
+    callvalue               // [msg.value, to_invalid || to == address(this), to]
+    CDZ_BELOW_MIN(0x64)     // [cdz_below_min, msg.value, to_invalid || to == address(this), to]
+    or or                   // [cdz_below_min || msg.value || to_invalid || to == address(this), to]
+    ASSERT_ZERO()           // [to]
+    // From does not need to be verified, if it's not a valid address allowance will always be zero.
     0x04 calldataload       // [from, to]
-    REQUIRE_ADDRESS2()      // [from, to]
     <zero>                  // [0, from, to]
     0x44 calldataload       // [amount, 0, from, to]
     swap2                   // [from, 0, amount, to]
@@ -434,11 +481,13 @@
 
     USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
         //                     [amount, from, 0, amount, to]
-        WITHDRAW_FROM_TO_END(<zero>, 0x00)
+        WITHDRAW_FROM_TO(<zero>, 0x00)
+        stop
     withdraw_from_to_allowed_2pop:
         //                     [_, _, amount, from, 0, amount, to]
         pop pop             // [amount, from, 0, amount, to]
-        WITHDRAW_FROM_TO_END(<zero>, 0x00)
+        WITHDRAW_FROM_TO(<zero>, 0x00)
+        stop
 }
 
 #define macro IS_FORK() = takes(0) returns(1) {
@@ -446,7 +495,7 @@
 }
 
 #define macro _DOMAIN_SEPARATOR_EXTERNAL(zero) = takes(0) returns(0) {
-    IS_FORK() BRANCHLESS_ASSERT_ZERO()
+    IS_FORK() ASSERT_ZERO()
     [CACHED_DOMAIN_SEPARATOR] RETURN_WORD(<zero>, msize)
 }
 
@@ -458,28 +507,29 @@
 }
 
 #define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 calldataload                // [owner]
-    0x24 calldataload                // [spender, owner]
-    REQUIRE_ADDRESS2()               // [spender, owner]
-    0x44 calldataload                // [allowance, spender, owner]
-    0x64 calldataload                // [deadline, allowance, spender, owner]
+    0x04 calldataload               // [owner]
+    0x24 calldataload               // [spender, owner]
+    ADDRESS_INVALID2()              // [addrs_invalid, spender, owner]
+    ASSERT_ZERO()                   // [spender, owner]
+    0x44 calldataload               // [allowance, spender, owner]
+    0x64 calldataload               // [deadline, allowance, spender, owner]
 
-    dup1 timestamp gt                // [block.timestamp > deadline, deadline, allowance, spender, owner]
-    permit_expired_error jumpi       // [deadline, allowance, spender, owner]
+    dup1 timestamp gt               // [block.timestamp > deadline, deadline, allowance, spender, owner]
+    permit_expired_error jumpi      // [deadline, allowance, spender, owner]
 
     // -- Prepare Basic Permit Params
-    [PERMIT_TYPE_HASH] <zero> mstore // [deadline, allowance, spender, owner]
-    dup4                0x20  mstore // [deadline, allowance, spender, owner]
-    dup3                0x40  mstore // [deadline, allowance, spender, owner]
-    dup2                0x60  mstore // [deadline, allowance, spender, owner]
-    /***/               0xa0  mstore // [allowance, spender, owner]
-
+    [PERMIT_TYPE_HASH] msize mstore // [deadline, allowance, spender, owner]
+    dup4               msize mstore // [deadline, allowance, spender, owner]
+    dup3               msize mstore // [deadline, allowance, spender, owner]
+    dup2               msize mstore // [deadline, allowance, spender, owner]
     // -- Prepare and Update Nonce
-    dup3 sload                       // [owner.data, allowance, spender, owner]
-    dup1 [NONCE_SHIFT] shr           // [owner.nonce, owner.data, allowance, spender, owner]
-    /***/               0x80  mstore // [owner.data, allowance, spender, owner]
-    [NONCE_INCREMENT] add            // [owner.data', allowance, spender, owner]
-    dup4 sstore                      // [allowance, spender, owner]
+    dup4 sload                      // [owner.data, deadline, allowance, spender, owner]
+    dup1 [NONCE_SHIFT] shr          // [owner.nonce, owner.data, deadline, allowance, spender, owner]
+    /***/              msize mstore // [owner.data, deadline, allowance, spender, owner]
+    [NONCE_INCREMENT] add           // [owner.data', deadline, allowance, spender, owner]
+    dup5 sstore                     // [deadline, allowance, spender, owner]
+    // -- Add Last Param (deadline)
+    /***/              msize mstore // [allowance, spender, owner]
 
     // -- Update Allowance
     0x40 0x20 sha3                   // [allowance.slot, allowance, spender, owner]
@@ -488,8 +538,8 @@
     0x20 0x60 log3                   // [owner]
 
     // -- Calculate Message Hash
-    0xc0 <zero> sha3                 // [permit_struct_hash, owner]
-    0x1901 <zero> mstore             // [permit_struct_hash, owner]
+    msize <zero> sha3                // [permit_struct_hash, owner]
+    [ERC712_ENCODE_HEAD]    <zero> mstore
     [CACHED_DOMAIN_SEPARATOR] 0x20 mstore
     //                                  [permit_struct_hash, owner]
     0x40 mstore                      // [owner]
@@ -499,19 +549,20 @@
     <zero> mstore                    // [owner]
     // Copy v, r, s at once into memory.
     0x60 0x84 0x20 calldatacopy      // [owner]
-
     0x20 <zero> 0x80 <zero>          // [0, 0x80, 0, 0x20, owner]
-    chainid gas staticcall           // [success, owner]
+    chainid                          // [1, 0, 0x80, 0, 0x20, owner]
+    gas staticcall                   // [success, owner]
     pop                              // [owner]
+     // If ecrecover failed no data will be returned and mem[0:0x20] will be the message hash.
     <zero> mload                     // [recovered_signer, owner]
+    // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
-    // Revert if fork or signature didn't match.
-    // If `ecrecover` fails message hash in 0x00 is not overwritten, successful bypass would
-    // require collision between owner address and the encoded struct hash.
-    IS_FORK() or invalid_signature_error jumpi
-    //                                  []
+    // Prevent cross-chain replays.
+    IS_FORK() or                     // [is_fork || owner != recovered_signer]
+    invalid_signature_error jumpi    // []
     stop
 }
+
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
     [ERC712_DOMAIN_HASH] <zero> mstore
     [NAME_HASH]           0x20  mstore
@@ -526,7 +577,7 @@
         COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize) [CACHED_DOMAIN_SEPARATOR] sub
         IS_FORK()
     or
-    BRANCHLESS_ASSERT_ZERO()
+    ASSERT_ZERO()
 }
 
 #define macro SELECTOR(zero) = takes(0) returns(1) {
@@ -871,6 +922,8 @@
         __FUNC_SIG(PermitExpired)           REVERT(<zero>)
     invalid_signature_error:
         __FUNC_SIG(InvalidSignature)        REVERT(0x00)
+    empty_revert_rdz:
+        <zero> <zero> revert
 }
 
 #define macro MAIN() = takes(0) returns(0) {
