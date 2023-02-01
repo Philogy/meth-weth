@@ -6,7 +6,7 @@
 providing a trustless, immutable and standardized way for smart contracts to abstract away the
 difference between the native ETH asset and fungible [ERC20](https://eips.ethereum.org/EIPS/eip-20) tokens.
 
-## 🪨 Deploy Instances
+## 🪨 Deployed Instances
 
 (pending final implementation and audits)
 
@@ -16,7 +16,7 @@ difference between the native ETH asset and fungible [ERC20](https://eips.ethere
 
 ## ✅ Why METH over WETH9?
 
-### 🔒 More Safety
+### 🔒 Fewer Footguns
 
 WETH9 does not have a `permit` method but implements a silent fallback method meaning it'll silently accept
 a call to all methods, even ones it hasn't implemented. This often leads to unforseen
@@ -25,13 +25,13 @@ certain methods or at the very least to revert if they do not implement the meth
 cause of [Multicoin's $ 1M bridge hack](https://medium.com/zengo/without-permit-multichains-exploit-explained-8417e8c1639b).
 
 _METH_ does **not** have a silent fallback method and will revert if it's called for a method it
-hasn't implemented. _METH_ does however implement a payable `receive` fallback method. Allowing you to deposit
-if you explicitly send ETH along with no calldata.
+hasn't implemented. _METH_ does however implement a payable `receive` fallback method. Allowing you to wrap ETH
+if you explicitly send ETH to the contract along with no calldata.
 
 ### 🧩 Backwards Compatible
 
 The previously existing `withdraw`, `deposit` and `receive` fallback method behave like WETH9's
-method meaning it should be a drop-in replacement.
+methods meaning it's a drop-in replacement.
 
 The only differences that may have to be considered:
 1. Calling `permit` on _METH_ will not silently pass, _METH_ implements a permit method according to
@@ -99,8 +99,9 @@ variables. Certain methods also allow contracts to avoid otherwise unused `recei
   receive() external payable {
       require(msg.sender == address(WETH));
   }
+  // ...
   uint amount = WETH9.balanceOf(address(this));
-  WETH9.withdraw();
+  WETH9.withdraw(amount);
   SafeTransferLib.safeTransferETH(recipient, amount);
   ```
 
@@ -118,6 +119,6 @@ To save gas a non-standard storage layout is used:
 
 Slot Name | Slot Determination | Values Stored (Bits)
 ----|----|----
-Main Account Data of `account` | `slot = account` | (255-128: `nonce`, 127-0: `balance`)
-Allowance `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))` | (255-0: `allowance`)
+Main Data of `account` | `slot = account_address` | (255-128: `nonce`, 127-0: `balance`)
+Allowance from `spender` for `owner` | `slot = keccak256(abi.encode(owner, spender))` | (255-0: `allowance`)
 
