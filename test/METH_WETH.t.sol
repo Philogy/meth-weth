@@ -2,8 +2,9 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {HuffDeployer} from "foundry-huff/HuffDeployer.sol";
+import {HuffDeployer} from "./utils/HuffDeployer.sol";
 import {IMETH} from "../src/interfaces/IMETH.sol";
+import {LibString} from "solady/utils/LibString.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract METH_WETHTest is Test {
@@ -19,15 +20,21 @@ contract METH_WETHTest is Test {
     function setUp() public {
         vm.chainId(MAINNET_CHAIN_ID);
 
+        HuffDeployer huffDeployer = new HuffDeployer();
+
         uint snapshot = vm.snapshot();
-        address nextContractAddr = HuffDeployer.deploy("test/Empty");
+        address nextContractAddr = huffDeployer.deploy("./src/test/Empty.huff", new string[](0), 0);
         vm.revertTo(snapshot);
 
-        address newDeployedWeth = HuffDeployer
-            .config()
-            .with_bytes32_constant("CACHED_DOMAIN_SEPARATOR", _getDomainSeparator(nextContractAddr))
-            .deploy("METH_WETH");
-        meth = IMETH(newDeployedWeth);
+        string[] memory consts = new string[](1);
+        consts[0] = string(
+            abi.encodePacked(
+                "CACHED_DOMAIN_SEPARATOR=",
+                LibString.toHexString(uint(_getDomainSeparator(nextContractAddr)), 32)
+            )
+        );
+
+        meth = IMETH(huffDeployer.deploy("./src/METH_WETH.huff", consts, 0));
     }
 
     modifier realAddr(address _a) {
