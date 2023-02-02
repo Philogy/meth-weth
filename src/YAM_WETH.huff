@@ -1,7 +1,7 @@
 // -- Base constants
 // If changed for alternative chain, replace use of CHAINID in `permit`.
 #define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
-#define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define constant UNLIMITED_APPROVAL = 0xff00000000000000000000000000000000000000000000000000000000000000
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
 
 // -- Selector Switch Constants
@@ -257,7 +257,7 @@
     caller msize  mstore // [amount, from]
     msize  <zero> sha3   // [allowance.slot, amount, from]
     dup1 sload           // [allowance, allowance.slot, amount, from]
-    dup1 [MAX_UINT] eq <use_allowance_2pop> jumpi
+    dup1 [UNLIMITED_APPROVAL] lte <use_allowance_2pop> jumpi
     //                      [allowance, allowance.slot, amount, from]
     dup1 dup4            // [amount, allowance, allowance, allowance.slot, amount, from]
     gt insufficient_allowance_error jumpi
