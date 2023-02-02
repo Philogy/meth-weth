@@ -42,6 +42,39 @@ contract METH_WETHTest is Test {
         _;
     }
 
+    function testSymbol() public {
+        bytes memory symbolCall = abi.encodeCall(IMETH.symbol, ());
+        (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
+        assertTrue(success);
+        assertEq(ret.length, 0x60);
+        assertEq(_loadWord(ret, 0x20), 0x20);
+        assertEq(_loadWord(ret, 0x40), 4);
+        assertEq(_loadWord(ret, 0x60), uint(bytes32("METH")));
+        string memory symbol = abi.decode(ret, (string));
+        assertEq(symbol, "METH");
+    }
+
+    function testName() public {
+        bytes memory nameCall = abi.encodeCall(IMETH.name, ());
+        (bool success, bytes memory ret) = address(meth).staticcall(nameCall);
+        assertTrue(success);
+        assertEq(ret.length, 0x80);
+        assertEq(_loadWord(ret, 0x20), 0x20);
+        assertEq(_loadWord(ret, 0x40), 33);
+        assertEq(_loadWord(ret, 0x80), uint(bytes32("r")));
+        string memory name = abi.decode(ret, (string));
+        assertEq(name, "Maximally Efficient Wrapped Ether");
+    }
+
+    function testDecimals() public {
+        bytes memory decimalsCall = abi.encodeCall(IMETH.decimals, ());
+        (bool success, bytes memory ret) = address(meth).staticcall(decimalsCall);
+        assertTrue(success);
+        assertEq(ret.length, 0x20);
+        assertEq(_loadWord(ret, 0x20), 18);
+        uint8 decimals = abi.decode(ret, (uint8));
+        assertEq(decimals, 18);
+    }
 
     function testDeposit_fuzzing(address _owner, uint128 _x) public realAddr(_owner) {
         vm.deal(_owner, _x);
@@ -61,6 +94,12 @@ contract METH_WETHTest is Test {
         meth.depositTo{value: _x}(_to);
         assertEq(meth.balanceOf(_to), _x);
         assertEq(meth.nonces(_to), 0);
+    }
+
+    function _loadWord(bytes memory _bytes, uint _offset) internal pure returns (uint word) {
+        assembly {
+            word := mload(add(_bytes, _offset))
+        }
     }
 
     function _getDomainSeparator(address _weth) internal pure returns (bytes32) {
