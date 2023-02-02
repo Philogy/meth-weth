@@ -37,9 +37,13 @@ interface IMETH is IERC20 {
                         WRAPPED ETHER
     //////////////////////////////////////////////////////////////*/
 
+    event Deposit(address indexed to, uint256 amount);
+
     function deposit() external payable;
 
     function depositTo(address _to) external payable;
+
+    event Withdrawal(address indexed from, uint256 amount);
 
     function withdraw(uint256 _amount) external;
 

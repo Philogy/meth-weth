@@ -57,7 +57,6 @@
 // ---- Errors
 #define error InsufficientBalance()
 #define error InsufficientAllowance()
-#define error InsufficientFreeBalance()
 #define error PermitExpired()
 #define error InvalidSignature()
 
@@ -81,20 +80,10 @@
     returndatasize returndatasize returndatacopy
 }
 
-#define macro NOT_160BITS() = takes(1) returns(1) {
-    // takes:         [addr]
-    dup1
-    [MAX_ADDR] and // [uint160(addr), addr]
-    sub            // [uint160(addr) != addr]
-    // returns:       [addr_not_160bits]
-}
-
 #define macro LOAD_ADDRESS() = takes(1) returns(1) {
     // takes:             [calldata_pos]
-    calldataload       // [addr]
-    dup1               // [addr, addr]
-    NOT_160BITS()      // [addr_not_160bits, addr]
-    ASSERT_ZERO()      // [addr]
+    calldataload       // [addr_raw]
+    [MAX_ADDR] and     // [addr]
     // returns:        // [addr]
 }
 
@@ -220,7 +209,7 @@
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 calldataload      // [spender]
+    0x04 LOAD_ADDRESS()    // [spender]
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
@@ -308,7 +297,7 @@
 }
 
 #define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    // Load & Verify Params.
+    // -- Load params.
     0x04 LOAD_ADDRESS()     // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
@@ -329,7 +318,7 @@
     // takes:                [amount, msg.sender]
 
     // -- Update Balance
-    dup2                  // [amount, amount, msg.sender]
+    dup1                  // [amount, amount, msg.sender]
     caller sload          // [msg.sender.data, amount, amount, msg.sender]
     dup1                  // [msg.sender.data, msg.sender.data, amount, amount, msg.sender]
     [BALANCE_MASK] and    // [msg.sender.bal, msg.sender.data, amount, amount, msg.sender]
@@ -445,18 +434,19 @@
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
     // Load & Verify Params.
-    0x04 calldataload       // [from]
-    0x44 calldataload       // [amount, from]
-    swap2                   // [from, amount]
-    dup3                    // [amount, from, amount]
+
+    PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
+    0x04 calldataload       // [from, 0, 0, 0, 0]
+    0x44 calldataload       // [amount, from, 0, 0, 0, 0]
+    dup2                    // [amount, from, amount, 0, 0, 0, 0]
 
     USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
-        //                     [amount, from, amount]
+        //                     [amount, from, amount, 0, 0, 0, 0]
         WITHDRAW_FROM_TO(<zero>)
         stop
     withdraw_from_to_allowed_2pop:
-        //                     [_, _, amount, from, amount]
-        pop pop             // [amount, from, amount]
+        //                     [_, _, amount, from, amount, 0, 0, 0, 0]
+        pop pop             // [amount, from, amount, 0, 0, 0, 0]
         WITHDRAW_FROM_TO(<zero>)
         stop
 }
