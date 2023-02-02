@@ -533,6 +533,13 @@
 }
 
 #define macro _MULTICALL_EXTERNAL(zero) = takes(0) returns(0) {
+
+#define macro RETURN_CODE() = takes(0) returns(0) {
+    pc 0x0f add dup1   // [const_size, const_size]
+    codesize sub       // [run_code_size, const_size]
+    dup1 swap2 0x00    // [0, const_size, run_code_size, run_code_size]
+    codecopy           // [run_code_size]
+    0x00 return
 }
 
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
@@ -550,6 +557,7 @@
         IS_FORK()
     or
     ASSERT_ZERO()
+    RETURN_CODE()
 }
 
 #define macro SELECTOR(zero) = takes(0) returns(1) {
