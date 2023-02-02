@@ -4,7 +4,17 @@ pragma solidity 0.8.15;
 import {IERC20} from "./IERC20.sol";
 
 /// @author philogy <https://github.com/philogy>
-interface IYAM_WETH is IERC20 {
+interface IMETH is IERC20 {
+    /*//////////////////////////////////////////////////////////////
+                            METADATA
+    //////////////////////////////////////////////////////////////*/
+
+    function symbol() external view returns (string memory);
+
+    function name() external view returns (string memory);
+
+    function decimals() external view returns (uint8);
+
     /*//////////////////////////////////////////////////////////////
                             ERC2612
     //////////////////////////////////////////////////////////////*/
@@ -34,6 +44,10 @@ interface IYAM_WETH is IERC20 {
     function withdraw(uint256 _amount) external;
 
     function withdrawTo(address _to, uint256 _amount) external;
+
+    function withdrawAll() external;
+
+    function withdrawAllTo(address) external;
 
     function withdrawFrom(address _from, uint256 _amount) external;
 

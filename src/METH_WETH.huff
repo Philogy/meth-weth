@@ -65,8 +65,10 @@
 // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
 #define constant ERC712_ENCODE_HEAD = 0x1901
 #define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
-#define constant NAME_HASH = 0x71ad9062969277156f043087ef6affb03325435a01d7a4ba510de93ca3859a76
-#define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
+// keccak256("Maximally Efficient Wrapped Ether")
+#define constant NAME_HASH = 0x6b9cc4b039c15ca6983e30e9ce1bbda1e4a82bcb7f7c783fb83f0ef373da695a
+// keccak256("1.0")
+#define constant VERSION_HASH = 0xe6bbd6277e1bf288eed5e8d1780f9a50b239e86b153736bceebccf4ea79d90b3
 #define constant CACHED_DOMAIN_SEPARATOR = 0xd00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d001
 
 // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
@@ -175,16 +177,16 @@
 // -- External Functions
 // ---- Metadata / Global Methods
 #define macro _NAME_EXTERNAL(zero) = takes(0) returns(0) {
-    // "Yet Another Maximized Wrapped Ether Contract" (len: 44)
-    0x7468657220436f6e7472616374 0x4c mstore
-    0x2c59657420416e6f74686572204d6178696d697a656420577261707065642045 0x3f mstore
+    // "Maximally Efficient Wrapped Ether" (len: 33)
+    0x6572 0x41 mstore
+    0x214d6178696d616c6c7920456666696369656e74205772617070656420457468 0x3f mstore
     0x20 <zero> mstore
     msize <zero> return
 }
 
 #define macro _SYMBOL_EXTERNAL(zero) = takes(0) returns(0) {
-    // "WETH"
-    0x0457455448 0x24 mstore
+    // "METH"
+    0x044d455448 0x24 mstore
     0x20 <zero> mstore
     msize <zero> return
 }
