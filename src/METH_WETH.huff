@@ -532,6 +532,9 @@
     stop
 }
 
+#define macro _MULTICALL_EXTERNAL(zero) = takes(0) returns(0) {
+}
+
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
     [ERC712_DOMAIN_HASH] <zero> mstore
     [NAME_HASH]           0x20  mstore
