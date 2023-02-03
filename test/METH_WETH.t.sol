@@ -100,6 +100,35 @@ contract METH_WETHTest is Test {
         assertEq(meth.nonces(_to), 0);
     }
 
+    function test_fuzzingTransfer(
+        address _from,
+        address _to,
+        uint128 _startAmount,
+        uint128 _transferAmount,
+        uint128 _fromNonce,
+        uint128 _toNonce
+    ) public {
+        vm.assume(_startAmount >= _transferAmount);
+        _setNonce(_from, _fromNonce);
+        _setNonce(_to, _toNonce);
+
+        vm.deal(_from, _startAmount);
+        vm.prank(_from);
+        meth.deposit{value: _startAmount}();
+
+        vm.prank(_from);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, _to, _transferAmount);
+        meth.transfer(_to, _transferAmount);
+
+        assertEq(meth.nonces(_from), _fromNonce, "transfer changed from nonce");
+        assertEq(meth.nonces(_to), _toNonce, "transfer changed to nonce");
+        if (_from != _to) {
+            assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
+            assertEq(meth.balanceOf(_to), _transferAmount);
+        }
+    }
+
     function testMulticall() public {
         bytes[] memory calls = new bytes[](3);
         calls[0] = abi.encodeCall(IMETH.decimals, ());
@@ -113,6 +142,17 @@ contract METH_WETHTest is Test {
         assertEq(retData[1], abi.encode(string("METH")));
         assertEq(retData[2].length, 0x80);
         assertEq(retData[2], abi.encode(string("Maximally Efficient Wrapped Ether")));
+    }
+
+    function test_fuzzing_util_setNonce(address _account, uint128 _nonce) public {
+        _setNonce(_account, _nonce);
+        assertEq(meth.nonces(_account), _nonce);
+    }
+
+    function _setNonce(address _account, uint128 _nonce) internal {
+        bytes32 accSlot = bytes32(uint(uint160(_account)));
+        bytes32 slotContent = vm.load(address(meth), accSlot);
+        vm.store(address(meth), accSlot, bytes32((uint(_nonce) << 128) | uint(uint160(uint(slotContent)))));
     }
 
     function _loadWord(bytes memory _bytes, uint _offset) internal pure returns (uint word) {
