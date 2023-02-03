@@ -2,6 +2,7 @@
 // If changed for alternative chain, replace use of CHAINID in `permit`.
 #define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant INF_ALLOW_LIM = 0xfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+#define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
 
 // -- Selector Switch Constants
@@ -522,7 +523,75 @@
     stop
 }
 
+
 #define macro _MULTICALL_EXTERNAL(zero) = takes(0) returns(0) {
+    callvalue                        // [msg.value]
+    0x04 calldataload                // [base_offset, msg.value]
+    0x20 sub                         // [base_offset != 0x20, msg.value]
+    or ASSERT_ZERO()                 // []
+
+    0x24 calldataload                // [total_calls]
+
+    // Prepare header return data
+    0x20 <zero> mstore               // [total_calls]
+    dup1  msize mstore               // [total_calls]
+
+    dup1 multicall_loop_start jumpi
+        // Return empty array if length == 0.
+        msize <zero> return
+    multicall_loop_start:
+        //                              [total_calls]
+        dup1 0x5 shl 0x40 add        // [ret_data_pointer, total_calls]
+        0x40                         // [res_offset_pointer, ret_data_pointer, total_calls]
+        0x24                         // [call_pointer, res_offset_pointer, ret_data_pointer, total_calls]
+    multicall_loop_continue:
+        // Move call pointer to next call.
+        0x20 add                     // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Load call position (call_offset = calldataload(call_pointer) + 0x44).
+        dup1 calldataload 0x44 add   // [call_offset, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Load call size.
+        dup1 calldataload            // [call_size, call_offset, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Copy call data to memory.
+        dup1 swap2                   // [call_offset, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        0x20 add                     // [call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        dup6                         // [ret_data_pointer, call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        calldatacopy                 // [call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Do self-delegatecall.
+        <zero> <zero>                // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        swap2                        // [call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        dup6                         // [ret_data_pointer, call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        address gas delegatecall     // [success, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        BUBBLE_REVERT(<zero>)        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Store return offset for returndata.
+        swap1                        // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
+        0x40 dup4 sub                // [rel_ret_offset, res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
+        dup2 mstore                  // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
+        // Move result offset pointer for next loop.
+        0x20 add                     // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
+        swap1                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Store returndatasize.
+        swap2                        // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        returndatasize dup2 mstore   // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        // Move returndata pointer for returndata. 
+        0x20 add                     // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        // Copy returndata into memory.
+        returndatasize <zero>        // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        dup3                         // [ret_data_pointer, 0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        returndatacopy               // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        // The returndata of all successful functions is a multiple of 0x20 so no zero padding and word alignment necessary.
+        // Move returndata pointer to be right after last returndata.
+        returndatasize add           // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        swap2                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        // Decrement loop left `calls_left` counter.
+        swap3                        // [calls_left, res_offset_pointer, ret_data_pointer, call_pointer]
+        [MAX_UINT] add               // [calls_left', res_offset_pointer, ret_data_pointer, call_pointer]
+        swap3                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left']
+        // Jump to next loop.
+        dup4 multicall_loop_continue jumpi
+    //                                  [call_pointer, res_offset_pointer, ret_data_pointer, 0]
+    swap2                            // [res_offset_pointer, ret_data_pointer, call_pointer, 0]
+    <zero> return
+}
 
 #define macro RETURN_CODE() = takes(0) returns(0) {
     pc 0x0f add dup1   // [const_size, const_size]
@@ -885,7 +954,8 @@
     permit_final_dest:
         _PERMIT_EXTERNAL(<zero>)
     multicall_final_dest:
-        _MULTICALL_EXTERNAL(<zero>)
+        // Multicall does non-payable check so `callvalue` used as zero.
+        _MULTICALL_EXTERNAL(callvalue)
 
     // Errors.
     insufficient_bal_error:

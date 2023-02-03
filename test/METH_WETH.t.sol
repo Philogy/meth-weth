@@ -96,6 +96,21 @@ contract METH_WETHTest is Test {
         assertEq(meth.nonces(_to), 0);
     }
 
+    function testMulticall() public {
+        bytes[] memory calls = new bytes[](3);
+        calls[0] = abi.encodeCall(IMETH.decimals, ());
+        calls[1] = abi.encodeCall(IMETH.symbol, ());
+        calls[2] = abi.encodeCall(IMETH.name, ());
+        bytes[] memory retData = meth.multicall(calls);
+        assertEq(retData.length, 3);
+        assertEq(retData[0].length, 0x20);
+        assertEq(retData[0], abi.encode(uint8(18)));
+        assertEq(retData[1].length, 0x60);
+        assertEq(retData[1], abi.encode(string("METH")));
+        assertEq(retData[2].length, 0x80);
+        assertEq(retData[2], abi.encode(string("Maximally Efficient Wrapped Ether")));
+    }
+
     function _loadWord(bytes memory _bytes, uint _offset) internal pure returns (uint word) {
         assembly {
             word := mload(add(_bytes, _offset))
