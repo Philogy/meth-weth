@@ -80,7 +80,7 @@ contract METH_WETHTest is Test {
         assertEq(decimals, 18);
     }
 
-    function testDeposit_fuzzing(address _owner, uint128 _x) public realAddr(_owner) {
+    function test_fuzzingDeposit(address _owner, uint128 _x) public {
         vm.deal(_owner, _x);
         vm.prank(_owner);
         vm.expectEmit(true, true, true, true);
@@ -90,7 +90,7 @@ contract METH_WETHTest is Test {
         assertEq(meth.nonces(_owner), 0);
     }
 
-    function testDepositTo_fuzzing(address _from, address _to, uint128 _x) public realAddr(_from) realAddr(_to) {
+    function test_fuzzingDepositTo(address _from, address _to, uint128 _x) public {
         vm.deal(_from, _x);
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
