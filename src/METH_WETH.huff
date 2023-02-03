@@ -169,9 +169,22 @@
     // returns:                        [amount]
 }
 
+#define macro NON_PAYABLE() = takes(0) returns(0) {
+    callvalue ASSERT_ZERO()
+}
+
+// Check whether top stack element is 0 and whether callvalue sent
+#define macro NON_ZERO_PAYABLE() = takes(1) returns(1) {
+    // takes:        [value_not_zero]
+    dup1 iszero   // [value_not_zero == 0, value_not_zero]
+    callvalue or  // [msg.value || value_not_zero == 0, value_not_zero]
+    ASSERT_ZERO() // [value_not_zero]
+    // returns:      [value_not_zero]
+}
 // -- External Functions
 // ---- Metadata / Global Methods
 #define macro _NAME_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // "Maximally Efficient Wrapped Ether" (len: 33)
     0x6572 0x41 mstore
     0x214d6178696d616c6c7920456666696369656e74205772617070656420457468 0x3f mstore
@@ -180,6 +193,7 @@
 }
 
 #define macro _SYMBOL_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // "METH"
     0x044d455448 0x24 mstore
     0x20 <zero> mstore
@@ -187,21 +201,25 @@
 }
 
 #define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     [DECIMALS] RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     selfbalance RETURN_WORD(<zero>, msize)
 }
 
 // ---- Transfer related methods
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     0x04 LOAD_ADDRESS() // [account]
     LOAD_BALANCE()      // [account.bal]
     RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // -- Load & Verify Params
     0x04 LOAD_ADDRESS() // [to]
     caller              // [msg.sender, to]
@@ -215,6 +233,7 @@
 }
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // -- Load & Verify Params
     0x04 LOAD_ADDRESS()    // [spender]
     0x24 calldataload      // [amount, spender]
@@ -236,6 +255,7 @@
 }
 
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
     msize mstore       // [spender]
@@ -272,6 +292,7 @@
 }
 
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // -- Load & Verify Params.
     0x24 LOAD_ADDRESS() // [to]
     0x04 calldataload   // [from, to]
@@ -343,6 +364,8 @@
     0x04 calldataload        // [amount, 0, 0, 0, 0]
     caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
     BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
+    // Return callvalue incase accidentally sent.
+    callvalue add            // [amount, 0, 0, 0, 0]
     caller                   // [msg.sender, amount, 0, 0, 0, 0]
     SEND_ETH(0x00)           // []
     stop
@@ -357,7 +380,8 @@
     BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
     // -- Transfer ETH
     0x04 calldataload        // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(0x00)           // []
+    NON_ZERO_PAYABLE()       // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(callvalue)      // []
     stop
 }
 
@@ -366,6 +390,8 @@
     PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
     // -- Update balance and emit event.
     WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
+    // Return callvalue incase accidentally sent.
+    callvalue add        // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     caller               // [msg.sender, amount, 0, 0, 0, 0]
     SEND_ETH(0x00)       // []
@@ -379,7 +405,8 @@
     WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     0x04 calldataload    // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(0x00)       // []
+    NON_ZERO_PAYABLE()   // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(callvalue)  // []
     stop
 }
 
@@ -409,6 +436,8 @@
     // takes:             [amount, from, amount, 0, 0, 0, 0]
 
     BURN_FROM(<zero>)  // [amount, 0, 0, 0, 0]
+    // Return callvalue incase accidentally sent.
+    callvalue add      // [amount, 0, 0, 0, 0]
     caller             // [msg.sender, amount, 0, 0, 0, 0]
     SEND_ETH(<zero>)   // []
 }
@@ -436,7 +465,8 @@
 
     BURN_FROM(<zero>)         // [amount, 0, 0, 0, 0]
     0x24 calldataload         // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(0x00)            // []
+    NON_ZERO_PAYABLE()        // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(callvalue)       // []
 }
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
@@ -524,8 +554,10 @@
     <zero> mload                     // [recovered_signer, owner]
     // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
+    // Callvalue check grouped in here to save gas.
+    callvalue or                     // [msg.value || owner != recovered_signer ]
     // Prevent cross-chain replays.
-    IS_FORK() or                     // [is_fork || owner != recovered_signer]
+    IS_FORK() or                     // [is_fork || msg.value || owner != recovered_signer]
     invalid_signature_error jumpi    // []
     stop
 }
@@ -601,6 +633,7 @@
 }
 
 #define macro _RESCUE_LOST_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
     // Load lost tokens.
     <zero>  LOAD_BALANCE()       // [0.bal]
     address LOAD_BALANCE()       // [this.balance, 0.bal]
