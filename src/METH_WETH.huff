@@ -536,7 +536,7 @@
     // -- Calculate Message Hash
     msize <zero> sha3                // [permit_struct_hash, owner]
     // Constructor ensures code is padded such that length is exatly 0x1901.
-    codesize                <zero> mstore
+    [ERC712_ENCODE_HEAD]    <zero> mstore
     [CACHED_DOMAIN_SEPARATOR] 0x20 mstore
     //                                  [permit_struct_hash, owner]
     0x40 mstore                      // [owner]
@@ -655,11 +655,11 @@
 }
 
 #define macro RETURN_CODE() = takes(0) returns(0) {
-    pc 0x11 add dup1   // [const_size, const_size]
+    pc 0x0f add dup1   // [const_size, const_size]
     codesize sub       // [run_code_size, const_size]
-    swap1 0x00         // [0, const_size, run_code_size]
-    codecopy           // []
-    [ERC712_ENCODE_HEAD] 0x00 return
+    dup1 swap2 0x00    // [0, const_size, run_code_size, run_code_size]
+    codecopy           // [run_code_size]
+    0x00 return
 }
 
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
@@ -786,7 +786,7 @@
     dest_0x43f: NO_MATCH()
     dest_0x44f: NO_MATCH()
     dest_0x45f: NO_MATCH()
-    dest_0x46f: NO_MATCH()
+    dest_0x46f: FUNC_CHECK(0x4648b24c, rescueLost_final_dest)
     dest_0x47f: NO_MATCH()
     dest_0x48f: NO_MATCH()
     dest_0x49f: NO_MATCH()
@@ -866,7 +866,7 @@
     dest_0x93f: NO_MATCH()
     dest_0x94f: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
     dest_0x95f: FUNC_CHECK(0x95d89b41, symbol_final_dest)
-    dest_0x96f: FUNC_CHECK(0x969e19b1, rescueLost_final_dest)
+    dest_0x96f: NO_MATCH()
     dest_0x97f: NO_MATCH()
     dest_0x98f: NO_MATCH()
     dest_0x99f: NO_MATCH()

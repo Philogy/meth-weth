@@ -10,6 +10,8 @@ import {LibString} from "solady/utils/LibString.sol";
 contract METH_WETHTest is Test {
     uint internal constant MAINNET_CHAIN_ID = 0x1;
 
+    address internal recovery = makeAddr("RECOVERY_ADDR");
+
     IMETH meth;
 
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -26,13 +28,14 @@ contract METH_WETHTest is Test {
         address nextContractAddr = huffDeployer.deploy("./src/test/Empty.huff", new string[](0), 0);
         vm.revertTo(snapshot);
 
-        string[] memory consts = new string[](1);
+        string[] memory consts = new string[](2);
         consts[0] = string(
             abi.encodePacked(
                 "CACHED_DOMAIN_SEPARATOR=",
                 LibString.toHexString(uint(_getDomainSeparator(nextContractAddr)), 32)
             )
         );
+        consts[1] = string(abi.encodePacked("RECOVERY_ADDR=", LibString.toHexString(recovery)));
 
         meth = IMETH(huffDeployer.deploy("./src/METH_WETH.huff", consts, 0));
     }
@@ -42,9 +45,9 @@ contract METH_WETHTest is Test {
         _;
     }
 
-    function testMagicCodeSize() public {
+    /* function testMagicCodeSize() public {
         assertEq(address(meth).code.length, 0x1901);
-    }
+    } */
 
     function testSymbol() public {
         bytes memory symbolCall = abi.encodeCall(IMETH.symbol, ());
@@ -147,6 +150,19 @@ contract METH_WETHTest is Test {
     function test_fuzzing_util_setNonce(address _account, uint128 _nonce) public {
         _setNonce(_account, _nonce);
         assertEq(meth.nonces(_account), _nonce);
+    }
+
+    function testRecovery() public {
+        address user = vm.addr(1);
+        vm.deal(user, 3 ether);
+        vm.prank(user);
+        meth.depositTo{value: 2.5 ether}(address(0));
+        assertEq(meth.balanceOf(address(0)), 2.5 ether);
+        vm.prank(user);
+        meth.depositTo{value: 0.3 ether}(address(meth));
+        assertEq(meth.balanceOf(address(meth)), 0.3 ether);
+        meth.rescueLost();
+        assertEq(meth.balanceOf(recovery), 2.8 ether);
     }
 
     function _setNonce(address _account, uint128 _nonce) internal {

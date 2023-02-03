@@ -63,6 +63,8 @@ interface IMETH is IERC20 {
 
     function multicall(bytes[] calldata _calls) external returns (bytes[] memory returnDatas);
 
+    function rescueLost() external;
+
     // Errors
     error InsufficientBalance();
     error InsufficientAllowance();
