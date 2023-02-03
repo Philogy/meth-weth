@@ -499,7 +499,8 @@
 
     // -- Calculate Message Hash
     msize <zero> sha3                // [permit_struct_hash, owner]
-    [ERC712_ENCODE_HEAD]    <zero> mstore
+    // Constructor ensures code is padded such that length is exatly 0x1901.
+    codesize                <zero> mstore
     [CACHED_DOMAIN_SEPARATOR] 0x20 mstore
     //                                  [permit_struct_hash, owner]
     0x40 mstore                      // [owner]
@@ -594,11 +595,11 @@
 }
 
 #define macro RETURN_CODE() = takes(0) returns(0) {
-    pc 0x0f add dup1   // [const_size, const_size]
+    pc 0x11 add dup1   // [const_size, const_size]
     codesize sub       // [run_code_size, const_size]
-    dup1 swap2 0x00    // [0, const_size, run_code_size, run_code_size]
-    codecopy           // [run_code_size]
-    0x00 return
+    swap1 0x00         // [0, const_size, run_code_size]
+    codecopy           // []
+    [ERC712_ENCODE_HEAD] 0x00 return
 }
 
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {

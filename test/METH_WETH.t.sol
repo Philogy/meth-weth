@@ -42,6 +42,10 @@ contract METH_WETHTest is Test {
         _;
     }
 
+    function testMagicCodeSize() public {
+        assertEq(address(meth).code.length, 0x1901);
+    }
+
     function testSymbol() public {
         bytes memory symbolCall = abi.encodeCall(IMETH.symbol, ());
         (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
