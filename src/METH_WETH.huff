@@ -9,13 +9,15 @@
 #define constant S_SHIFT = 0x14 // 20
 #define constant S_COVER = 0x0f // 15 (1111_2)
 
-// -- Base Contracts
+// -- Base Contract Constants
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 #define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
 #define constant NONCE_MASK = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
 #define constant NONCE_SHIFT = 0x80
 #define constant NONCE_INCREMENT = 0x0100000000000000000000000000000000
 #define constant DECIMALS = 0x12 // 18
+// The only "special" thing the recovery contract can do is receive tokens that were accidentally sent to the zero address or the contract itself
+#define constant RECOVERY_ADDR = 0x1212121212121212121212121212121212121212
 
 // -- ABI Constants
 // ---- Functions
@@ -127,6 +129,13 @@
     sload [BALANCE_MASK] and
 }
 
+#define macro EMIT_TRANSFER(zero, word_size) = takes(3) returns(0) {
+    // takes:                 [amount, from, to]
+    <zero> mstore          // [from, to]
+    __EVENT_HASH(Transfer) // [Transfer.sig, from, to]
+    <word_size> <zero> log3
+}
+
 #define macro TRANSFER(zero, word_size) = takes(5) returns(0) {
     // takes:                  [from, amount, amount, from, to]
 
@@ -144,10 +153,7 @@
     dup2 add                // [to.data', amount, from, to]
     dup4 sstore             // [amount, from, to]
 
-    // -- Emit `Transfer`
-    <zero> mstore           // [from, to]
-    __EVENT_HASH(Transfer)  // [Transfer.sig, from, to]
-    <word_size> <zero> log3 // []
+    EMIT_TRANSFER(<zero>, <word_size>)
 }
 
 #define macro WITHDRAW_ALL(zero) = takes(0) returns(1) {
@@ -594,6 +600,27 @@
     <zero> return
 }
 
+#define macro _RESCUE_LOST_EXTERNAL(zero) = takes(0) returns(0) {
+    // Load lost tokens.
+    <zero>  LOAD_BALANCE()       // [0.bal]
+    address LOAD_BALANCE()       // [this.balance, 0.bal]
+    // Emit Transfer events.
+    [RECOVERY_ADDR] <zero> dup4  // [0.bal, 0, recovery_addr, this.balance, 0.bal]
+    EMIT_TRANSFER(<zero>, msize) // [this.balance, 0.bal]
+    [RECOVERY_ADDR] address dup3 // [this.balance, this, recovery_addr, this.balance, 0.bal]
+    EMIT_TRANSFER(<zero>, msize) // [this.balance, 0.bal]
+    // Increase the balance of the rescue address.
+    add                          // [total_lost]
+    [RECOVERY_ADDR] sload        // [recovery_addr.data, total_lost]
+    add                          // [recovery_addr.data']
+    [RECOVERY_ADDR] sstore       // []
+    // Reset balance of "lost accounts" to 0.
+    <zero> <zero>  sstore        // []
+    <zero> address sstore        // []
+    // Send ETH to rescue address
+    stop
+}
+
 #define macro RETURN_CODE() = takes(0) returns(0) {
     pc 0x11 add dup1   // [const_size, const_size]
     codesize sub       // [run_code_size, const_size]
@@ -806,7 +833,7 @@
     dest_0x93f: NO_MATCH()
     dest_0x94f: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
     dest_0x95f: FUNC_CHECK(0x95d89b41, symbol_final_dest)
-    dest_0x96f: NO_MATCH()
+    dest_0x96f: FUNC_CHECK(0x969e19b1, rescueLost_final_dest)
     dest_0x97f: NO_MATCH()
     dest_0x98f: NO_MATCH()
     dest_0x99f: NO_MATCH()
@@ -957,6 +984,9 @@
     multicall_final_dest:
         // Multicall does non-payable check so `callvalue` used as zero.
         _MULTICALL_EXTERNAL(callvalue)
+    rescueLost_final_dest:
+        _RESCUE_LOST_EXTERNAL(<zero>)
+
 
     // Errors.
     insufficient_bal_error:
@@ -967,8 +997,6 @@
         __FUNC_SIG(PermitExpired)           REVERT(<zero>)
     invalid_signature_error:
         __FUNC_SIG(InvalidSignature)        REVERT(0x00)
-    empty_revert_rdz:
-        <zero> <zero> revert
 }
 
 #define macro MAIN() = takes(0) returns(0) {
