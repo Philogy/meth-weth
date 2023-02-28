@@ -5,11 +5,19 @@
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
 
-// -- Selector Switch Constants
+// -- Base Contract Constants
+// ---- Immutable offset constants
+// @custom:post-compile
+#define constant DS_LOC1 = 0x176d
+// @custom:post-compile
+#define constant DS_LOC2 = 0x184a
+// @custom:post-compile
+#define constant CSTR_SIZE = 0x8e
+
+// ---- Selector Switch Constants
 #define constant S_SHIFT = 0x14 // 20
 #define constant S_COVER = 0x0f // 15 (1111_2)
-
-// -- Base Contract Constants
+// ---- Storage Layout Constants
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
 #define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
 #define constant NONCE_MASK = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
@@ -71,7 +79,7 @@
 #define constant NAME_HASH = 0x6b9cc4b039c15ca6983e30e9ce1bbda1e4a82bcb7f7c783fb83f0ef373da695a
 // keccak256("1.0")
 #define constant VERSION_HASH = 0xe6bbd6277e1bf288eed5e8d1780f9a50b239e86b153736bceebccf4ea79d90b3
-#define constant CACHED_DOMAIN_SEPARATOR = 0xd00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d00d001
+#define constant DOMAIN_SEPARATOR_PLACEHOLDER = 0x4091cc981ab0391433dfcfc83900e539caf99b1ea50ebd1576d319483e4adeb4
 
 // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
 #define constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
@@ -494,7 +502,7 @@
 
 #define macro _DOMAIN_SEPARATOR_EXTERNAL(zero) = takes(0) returns(0) {
     IS_FORK() ASSERT_ZERO()
-    [CACHED_DOMAIN_SEPARATOR] RETURN_WORD(<zero>, msize)
+    [DOMAIN_SEPARATOR_PLACEHOLDER] RETURN_WORD(<zero>, msize)
 }
 
 #define macro _NONCES_EXTERNAL(zero) = takes(0) returns(0) {
@@ -536,8 +544,8 @@
     // -- Calculate Message Hash
     msize <zero> sha3                // [permit_struct_hash, owner]
     // Constructor ensures code is padded such that length is exatly 0x1901.
-    [ERC712_ENCODE_HEAD]    <zero> mstore
-    [CACHED_DOMAIN_SEPARATOR] 0x20 mstore
+    [ERC712_ENCODE_HEAD]         <zero> mstore
+    [DOMAIN_SEPARATOR_PLACEHOLDER] 0x20 mstore
     //                                  [permit_struct_hash, owner]
     0x40 mstore                      // [owner]
     0x42 0x1e sha3                   // [encoded_struct, owner]
@@ -663,21 +671,27 @@
 }
 
 #define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
-    [ERC712_DOMAIN_HASH] <zero> mstore
-    [NAME_HASH]           0x20  mstore
-    [VERSION_HASH]        0x40  mstore
-    chainid               0x60  mstore
-    address               0x80  mstore
-    0xa0 <zero> sha3
+    [ERC712_DOMAIN_HASH] msize mstore
+    [NAME_HASH]          msize mstore
+    [VERSION_HASH]       msize mstore
+    chainid              msize mstore
+    address              msize mstore
+    msize <zero> sha3
 }
 
 #define macro CONSTRUCTOR() = takes(0) returns(0) {
-    // Check that placeholder domain separator was replaced and correctly computed
-        COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize) [CACHED_DOMAIN_SEPARATOR] sub
-        IS_FORK()
-    or
-    ASSERT_ZERO()
-    RETURN_CODE()
+    IS_FORK() ASSERT_ZERO()
+    COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize)
+    [CSTR_SIZE] dup1      // [constructor_size, domain_separator]
+    codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
+    sub                   // [runtime_size, cstr_size, domain_separator]
+    dup1 swap2            // [cstr_size, runtime_size, runtime_size, domain_separator]
+    returndatasize        // [0, cstr_size, runtime_size, runtime_size, domain_separator]
+    codecopy              // [runtime_size, domain_separator]
+    swap1                 // [domain_separator, runtime_size]
+    dup1 [DS_LOC1] mstore // [domain_separator, runtime_size]
+         [DS_LOC2] mstore // [runtime_size]
+    returndatasize return
 }
 
 #define macro SELECTOR(zero) = takes(0) returns(1) {
