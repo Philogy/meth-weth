@@ -240,8 +240,7 @@
     RETURN_TRUE(<zero>, msize)
 }
 
-#define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
+#define macro APPROVE(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
     0x04 LOAD_ADDRESS()    // [spender]
     0x24 calldataload      // [amount, spender]
@@ -258,6 +257,12 @@
     caller                 // [owner, spender]
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
     0x20 <zero> log3       // []
+}
+
+#define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
+    NON_PAYABLE()
+
+    APPROVE(<zero>)
 
     RETURN_TRUE(<zero>, 0x20)
 }
@@ -323,12 +328,16 @@
     <word_size> <zero> log2 // []
 }
 
-#define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro DEPOSIT(zero) = takes(0) returns(0) {
     caller sload            // [msg.sender.data]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [msg.sender.data']
     caller sstore           // []
     caller EMIT_DEPOSIT(<zero>, msize)
+}
+
+#define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
+    DEPOSIT(<zero>)
     stop
 }
 
@@ -340,6 +349,12 @@
     callvalue add           // [to.bal', to]
     dup2 sstore             // [to]
     EMIT_DEPOSIT(<zero>, msize)
+    stop
+}
+
+#define macro _DEPOSIT_AND_APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
+    DEPOSIT(<zero>)
+    APPROVE(<zero>)
     stop
 }
 
@@ -770,7 +785,7 @@
     dest_0x25f: NO_MATCH()
     dest_0x26f: NO_MATCH()
     dest_0x27f: NO_MATCH()
-    dest_0x28f: NO_MATCH()
+    dest_0x28f: FUNC_CHECK(0x28026ace, depositAndApprove_final_dest)
     dest_0x29f: NO_MATCH()
     dest_0x2af: NO_MATCH()
     dest_0x2bf: NO_MATCH()
@@ -1007,9 +1022,11 @@
     allowance_final_dest:
         _ALLOWANCE_EXTERNAL(<zero>)
     deposit_final_dest:
-        _DEPOSIT_EXTERNAL(<zero>)
+        _DEPOSIT_EXTERNAL(returndatasize)
     depositTo_final_dest:
-        _DEPOSIT_TO_EXTERNAL(<zero>)
+        _DEPOSIT_TO_EXTERNAL(returndatasize)
+    depositAndApprove_final_dest:
+        _DEPOSIT_AND_APPROVE_EXTERNAL(returndatasize)
     withdraw_final_dest:
         _WITHDRAW_EXTERNAL(<zero>)
     withdrawTo_final_dest:
@@ -1030,10 +1047,9 @@
         _PERMIT_EXTERNAL(<zero>)
     multicall_final_dest:
         // Multicall does non-payable check so `callvalue` used as zero.
-        _MULTICALL_EXTERNAL(callvalue)
+        _MULTICALL_EXTERNAL(<zero>)
     rescueLost_final_dest:
         _RESCUE_LOST_EXTERNAL(<zero>)
-
 
     // Errors.
     insufficient_bal_error:
@@ -1043,9 +1059,9 @@
     permit_expired_error:
         __FUNC_SIG(PermitExpired)           REVERT(<zero>)
     invalid_signature_error:
-        __FUNC_SIG(InvalidSignature)        REVERT(0x00)
+        __FUNC_SIG(InvalidSignature)        REVERT(<zero>)
 }
 
 #define macro MAIN() = takes(0) returns(0) {
-  _MAIN(returndatasize)
+  _MAIN(callvalue)
 }
