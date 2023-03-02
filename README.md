@@ -12,6 +12,8 @@ difference between the native ETH asset and fungible [ERC20](https://eips.ethere
 
 ## 🏆 Gas Use: METH vs WETH9
 
+**STILL A WORK IN PROGRESS, MORE COMPARISONS NECESSARY**
+
 Comparison may improve in favor of _METH_ if more optimizations are found.
 
 ### Direct Calls
