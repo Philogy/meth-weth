@@ -12,7 +12,14 @@ difference between the native ETH asset and fungible [ERC20](https://eips.ethere
 
 ## 🏆 Gas Use: METH vs WETH9
 
-(pending final implementation)
+Comparison may improve in favor of _METH_ if more optimizations are found.
+
+### Direct Calls
+This table contains a comparison of gas costs for limited function calls.
+
+|Method|WETH9|METH|Difference|
+|`deposit()` no balance|45,038|44,628|-410|
+
 
 ## ✅ Why METH over WETH9?
 
