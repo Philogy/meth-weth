@@ -7,5 +7,5 @@ import {IERC20} from "../../src/interfaces/IERC20.sol";
 interface IWETH9 is IERC20 {
     function deposit() external payable;
 
-    function withdraw(uint _amount) external;
+    function withdraw(uint256 _amount) external;
 }

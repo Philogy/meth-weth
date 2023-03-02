@@ -33,24 +33,24 @@ contract YAM_WETHBenchmarkTest is Test {
     }
 
     function testDepositToFreshWeth9() public pranking(globUser1) {
-        uint amount = 23.0e18;
+        uint256 amount = 23.0e18;
         WETH9.deposit{value: amount}();
         WETH9.transfer(vm.addr(1), amount);
     }
 
     function testDepositToFreshYAMWETH() public pranking(globUser1) {
-        uint amount = 23.0e18;
+        uint256 amount = 23.0e18;
         weth.depositTo{value: amount}(vm.addr(1));
     }
 
     function testDepositToExistingWeth9() public pranking(globUser1) {
-        uint amount = 23.0e18;
+        uint256 amount = 23.0e18;
         WETH9.deposit{value: amount}();
         WETH9.transfer(globUser2, amount);
     }
 
     function testDepositToExistingYAMWETH() public pranking(globUser1) {
-        uint amount = 23.0e18;
+        uint256 amount = 23.0e18;
         weth.depositTo{value: amount}(globUser2);
     }
 }
