@@ -17,8 +17,11 @@ Comparison may improve in favor of _METH_ if more optimizations are found.
 ### Direct Calls
 This table contains a comparison of gas costs for limited function calls.
 
-|Method|WETH9|METH|Difference|
-|`deposit()` no balance|45,038|44,628|-410|
+|Method|WETH9|METH|Difference|Added Details|
+|------|-----|----|----------|-------------|
+|`deposit()`|45,038|44,628|-410|Wrap non-zero amount with no existing balance|
+|`transfer()`|46,734|45,790|-944|Transfer to account with zero balance|
+|receive-fallback|44,731|44,563|-168|Wrap non-zero amount with no existing balance|
 
 
 ## ✅ Why METH over WETH9?
