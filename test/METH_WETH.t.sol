@@ -8,7 +8,7 @@ import {LibString} from "solady/utils/LibString.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract METH_WETHTest is Test {
-    uint internal constant MAINNET_CHAIN_ID = 0x1;
+    uint256 internal constant MAINNET_CHAIN_ID = 0x1;
 
     address internal recovery = makeAddr("RECOVERY_ADDR");
 
@@ -24,18 +24,8 @@ contract METH_WETHTest is Test {
 
         HuffDeployer huffDeployer = new HuffDeployer();
 
-        uint snapshot = vm.snapshot();
-        address nextContractAddr = huffDeployer.deploy("./src/test/Empty.huff", new string[](0), 0);
-        vm.revertTo(snapshot);
-
-        string[] memory consts = new string[](2);
-        consts[0] = string(
-            abi.encodePacked(
-                "CACHED_DOMAIN_SEPARATOR=",
-                LibString.toHexString(uint(_getDomainSeparator(nextContractAddr)), 32)
-            )
-        );
-        consts[1] = string(abi.encodePacked("RECOVERY_ADDR=", LibString.toHexString(recovery)));
+        string[] memory consts = new string[](1);
+        consts[0] = string(abi.encodePacked("RECOVERY_ADDR=", LibString.toHexString(recovery)));
 
         meth = IMETH(huffDeployer.deploy("./src/METH_WETH.huff", consts, 0));
     }
@@ -45,18 +35,15 @@ contract METH_WETHTest is Test {
         _;
     }
 
-    /* function testMagicCodeSize() public {
-        assertEq(address(meth).code.length, 0x1901);
-    } */
-
     function testSymbol() public {
+        emit log_named_uint("address(meth).code.length", address(meth).code.length);
         bytes memory symbolCall = abi.encodeCall(IMETH.symbol, ());
         (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
         assertTrue(success);
         assertEq(ret.length, 0x60);
         assertEq(_loadWord(ret, 0x20), 0x20);
         assertEq(_loadWord(ret, 0x40), 4);
-        assertEq(_loadWord(ret, 0x60), uint(bytes32("METH")));
+        assertEq(_loadWord(ret, 0x60), uint256(bytes32("METH")));
         string memory symbol = abi.decode(ret, (string));
         assertEq(symbol, "METH");
     }
@@ -68,7 +55,7 @@ contract METH_WETHTest is Test {
         assertEq(ret.length, 0x80);
         assertEq(_loadWord(ret, 0x20), 0x20);
         assertEq(_loadWord(ret, 0x40), 33);
-        assertEq(_loadWord(ret, 0x80), uint(bytes32("r")));
+        assertEq(_loadWord(ret, 0x80), uint256(bytes32("r")));
         string memory name = abi.decode(ret, (string));
         assertEq(name, "Maximally Efficient Wrapped Ether");
     }
@@ -122,13 +109,70 @@ contract METH_WETHTest is Test {
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
         emit Transfer(_from, _to, _transferAmount);
-        meth.transfer(_to, _transferAmount);
+        assertTrue(meth.transfer(_to, _transferAmount));
 
-        assertEq(meth.nonces(_from), _fromNonce, "transfer changed from nonce");
+        if (_from != _to) {
+            assertEq(meth.nonces(_from), _fromNonce, "transfer changed from nonce");
+            assertEq(meth.balanceOf(_from), _startAmount - _transferAmount, "balance from after");
+            assertEq(meth.balanceOf(_to), _transferAmount, "balance to after");
+        }
         assertEq(meth.nonces(_to), _toNonce, "transfer changed to nonce");
+    }
+
+    function test_fuzzingApprove(address _owner, address _spender, uint256 _allowance1, uint256 _allowance2) public {
+        assertEq(meth.allowance(_owner, _spender), 0);
+
+        vm.prank(_owner);
+        vm.expectEmit(true, true, true, true);
+        emit Approval(_owner, _spender, _allowance1);
+        meth.approve(_spender, _allowance1);
+        assertEq(meth.allowance(_owner, _spender), _allowance1);
+
+        vm.prank(_owner);
+        vm.expectEmit(true, true, true, true);
+        emit Approval(_owner, _spender, _allowance2);
+        meth.approve(_spender, _allowance2);
+        assertEq(meth.allowance(_owner, _spender), _allowance2);
+    }
+
+    function test_fuzzingTransferFrom(
+        address _operator,
+        address _from,
+        address _to,
+        uint256 _allowance,
+        uint128 _startAmount,
+        uint128 _transferAmount,
+        uint128 _fromNonce,
+        uint128 _toNonce
+    ) public {
+        vm.assume(0xff00000000000000000000000000000000000000000000000000000000000000 >= _allowance);
+        vm.assume(_allowance >= _startAmount);
+        vm.assume(_startAmount >= _transferAmount);
+
+        // Setup.
+        _setNonce(_from, _fromNonce);
+        _setNonce(_to, _toNonce);
+        vm.deal(_from, _startAmount);
+        vm.prank(_from);
+        meth.deposit{value: _startAmount}();
+        vm.prank(_from);
+        meth.approve(_operator, _allowance);
+
+        // Actual test.
+        vm.prank(_operator);
+        vm.expectEmit(true, true, true, true);
+        emit Transfer(_from, _to, _transferAmount);
+        bool success = meth.transferFrom(_from, _to, _transferAmount);
+        assertTrue(success);
+
+        assertEq(meth.allowance(_from, _operator), _allowance - _transferAmount);
+        assertEq(meth.nonces(_from), _fromNonce);
+        assertEq(meth.nonces(_to), _toNonce);
         if (_from != _to) {
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
             assertEq(meth.balanceOf(_to), _transferAmount);
+        } else {
+            assertEq(meth.balanceOf(_from), _startAmount);
         }
     }
 
@@ -165,28 +209,31 @@ contract METH_WETHTest is Test {
         assertEq(meth.balanceOf(recovery), 2.8 ether);
     }
 
-    function _setNonce(address _account, uint128 _nonce) internal {
-        bytes32 accSlot = bytes32(uint(uint160(_account)));
-        bytes32 slotContent = vm.load(address(meth), accSlot);
-        vm.store(address(meth), accSlot, bytes32((uint(_nonce) << 128) | uint(uint160(uint(slotContent)))));
+    function testDomainSeparator() public {
+        assertEq(meth.DOMAIN_SEPARATOR(), _getDomainSeparator(address(meth)));
     }
 
-    function _loadWord(bytes memory _bytes, uint _offset) internal pure returns (uint word) {
+    function _setNonce(address _account, uint128 _nonce) internal {
+        bytes32 accSlot = bytes32(uint256(uint160(_account)));
+        bytes32 slotContent = vm.load(address(meth), accSlot);
+        vm.store(address(meth), accSlot, bytes32((uint256(_nonce) << 128) | uint256(uint160(uint256(slotContent)))));
+    }
+
+    function _loadWord(bytes memory _bytes, uint256 _offset) internal pure returns (uint256 word) {
         assembly {
             word := mload(add(_bytes, _offset))
         }
     }
 
     function _getDomainSeparator(address _weth) internal pure returns (bytes32) {
-        return
-            keccak256(
-                abi.encode(
-                    keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                    keccak256("Maximally Efficient Wrapped Ether"),
-                    keccak256("1.0"),
-                    MAINNET_CHAIN_ID,
-                    _weth
-                )
-            );
+        return keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256("Maximally Efficient Wrapped Ether"),
+                keccak256("1.0"),
+                MAINNET_CHAIN_ID,
+                _weth
+            )
+        );
     }
 }

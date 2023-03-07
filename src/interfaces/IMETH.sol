@@ -22,14 +22,14 @@ interface IMETH is IERC20 {
     function permit(
         address _owner,
         address _spender,
-        uint _value,
-        uint _deadline,
+        uint256 _value,
+        uint256 _deadline,
         uint8 _v,
         bytes32 _r,
         bytes32 _s
     ) external;
 
-    function nonces(address _owner) external view returns (uint);
+    function nonces(address _owner) external view returns (uint256);
 
     function DOMAIN_SEPARATOR() external view returns (bytes32);
 
@@ -42,6 +42,8 @@ interface IMETH is IERC20 {
     function deposit() external payable;
 
     function depositTo(address _to) external payable;
+
+    function depositAndApprove(address _spender, uint256 _amount) external;
 
     event Withdrawal(address indexed from, uint256 amount);
 
