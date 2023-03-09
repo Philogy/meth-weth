@@ -31,13 +31,13 @@ SIGS = [
     # deposit
     'deposit()',
     'depositTo(address)',
-    'depositAmountTo(address, uint256)',
-    'depositAmount(uint256)',
     # withdraw
     'withdraw(uint256)',
     'withdrawTo(address, uint256)',
     'withdrawFrom(address, uint256)',
     'withdrawFromTo(address, address, uint256)',
+    'withdrawAll()',
+    'withdrawAllTo(address)',
     # permit
     'DOMAIN_SEPARATOR()',
     'nonces(address)',
