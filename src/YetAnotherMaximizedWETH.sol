@@ -11,8 +11,8 @@ contract YAM_WETH is Multicallable {
     /// @notice Determined via keccak256("YAM_WETH.totalSupply") - 1
     bytes32 internal constant TOTAL_SUPPLY_SLOT = 0xd56ede8fae84e89fcc30c580c1e75530f248a337be6f2dd2c582e96a7859b532;
 
-    uint internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
-    uint internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
+    uint256 internal constant BALANCE_MASK = 0xffffffffffffffffffffffff;
+    uint256 internal constant ADDR_MASK = 0x00ffffffffffffffffffffffffffffffffffffffff;
 
     bytes32 internal constant TRANSFER_EVENT_SIG = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef;
 
@@ -28,7 +28,7 @@ contract YAM_WETH is Multicallable {
     // keccak256("1")
     bytes32 internal constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6;
     bytes32 internal immutable CACHED_DOMAIN_SEPARATOR;
-    uint internal immutable CACHED_CHAINID;
+    uint256 internal immutable CACHED_CHAINID;
 
     // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
     bytes32 internal constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
@@ -92,7 +92,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function approve(address _spender, uint _allowance) external payable succeeds returns (bool) {
+    function approve(address _spender, uint256 _allowance) external payable succeeds returns (bool) {
         assembly {
             mstore(0x00, caller())
             mstore(0x20, _spender)
@@ -115,11 +115,11 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function transfer(address _to, uint _amount) external payable succeeds returns (bool) {
+    function transfer(address _to, uint256 _amount) external payable succeeds returns (bool) {
         _transfer(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
-    function transferFrom(address _from, address _to, uint _amount) external payable succeeds returns (bool) {
+    function transferFrom(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
         bytes32 fromData = _useAllowance(_from, _amount);
         _transfer(fromData, _from, _to, _amount);
     }
@@ -132,7 +132,7 @@ contract YAM_WETH is Multicallable {
         _depositAllTo(_recipient);
     }
 
-    function depositToMany(address[] calldata _recipients, uint _amount) external payable succeeds returns (bool) {
+    function depositToMany(address[] calldata _recipients, uint256 _amount) external payable succeeds returns (bool) {
         assembly {
             let recipientOffset := _recipients.offset
             let totalRecipients := _recipients.length
@@ -170,7 +170,7 @@ contract YAM_WETH is Multicallable {
 
     struct Deposit {
         address recipient;
-        uint amount;
+        uint256 amount;
     }
 
     function depositAmountsToMany(Deposit[] calldata _deposits) external payable succeeds returns (bool) {
@@ -191,13 +191,14 @@ contract YAM_WETH is Multicallable {
                 depositTotal := add(depositTotal, amount)
                 // Checks that `depositTotal += amount` did not overflow and that recipient is
                 // a valid, non-zero address
-                hasErrors := or(
-                    hasErrors,
+                hasErrors :=
                     or(
-                        gt(prevDepositTotal, depositTotal),
-                        or(sub(recipient, and(recipient, ADDR_MASK)), iszero(recipient))
+                        hasErrors,
+                        or(
+                            gt(prevDepositTotal, depositTotal),
+                            or(sub(recipient, and(recipient, ADDR_MASK)), iszero(recipient))
+                        )
                     )
-                )
                 sstore(recipient, add(sload(recipient), amount))
                 mstore(0x00, amount)
                 log3(0x00, 0x20, TRANSFER_EVENT_SIG, 0, recipient)
@@ -221,27 +222,27 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function withdraw(uint _amount) external payable succeeds returns (bool) {
+    function withdraw(uint256 _amount) external payable succeeds returns (bool) {
         _withdrawTo(msg.sender, _amount);
     }
 
-    function withdrawTo(address _to, uint _amount) external payable succeeds returns (bool) {
+    function withdrawTo(address _to, uint256 _amount) external payable succeeds returns (bool) {
         _withdrawTo(_to, _amount);
     }
 
-    function withdrawFrom(address _from, uint _amount) external payable succeeds returns (bool) {
+    function withdrawFrom(address _from, uint256 _amount) external payable succeeds returns (bool) {
         _withdrawFromTo(_from, msg.sender, _amount);
     }
 
-    function withdrawFromTo(address _from, address _to, uint _amount) external payable succeeds returns (bool) {
+    function withdrawFromTo(address _from, address _to, uint256 _amount) external payable succeeds returns (bool) {
         _withdrawFromTo(_from, _to, _amount);
     }
 
     function permit(
         address _owner,
         address _spender,
-        uint _allowance,
-        uint _deadline,
+        uint256 _allowance,
+        uint256 _deadline,
         uint8 _v,
         bytes32 _r,
         bytes32 _s
@@ -291,16 +292,14 @@ contract YAM_WETH is Multicallable {
 
             // Check recovered owner.
             returndatacopy(
-                returndatasize(),
-                returndatasize(),
-                or(sub(returndatasize(), 0x20), sub(recoveredSigner, _owner))
+                returndatasize(), returndatasize(), or(sub(returndatasize(), 0x20), sub(recoveredSigner, _owner))
             )
 
             stop()
         }
     }
 
-    function balanceOf(address _account) external view returns (uint) {
+    function balanceOf(address _account) external view returns (uint256) {
         assembly {
             let bal := and(sload(_account), BALANCE_MASK)
             mstore(0x00, bal)
@@ -308,7 +307,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function allowance(address _account, address _spender) external view returns (uint) {
+    function allowance(address _account, address _spender) external view returns (uint256) {
         assembly {
             mstore(0x00, _account)
             mstore(0x20, _spender)
@@ -317,7 +316,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function totalSupply() external view returns (uint) {
+    function totalSupply() external view returns (uint256) {
         assembly {
             mstore(0x00, sload(TOTAL_SUPPLY_SLOT))
             return(0x00, 0x20)
@@ -336,7 +335,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function nonces(address _account) external view returns (uint) {
+    function nonces(address _account) external view returns (uint256) {
         assembly {
             let nonce := sload(shl(96, _account))
             mstore(0x00, nonce)
@@ -360,16 +359,16 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function _withdrawTo(address _to, uint _amount) internal {
+    function _withdrawTo(address _to, uint256 _amount) internal {
         _withdrawDirectFromTo(_getData(msg.sender), msg.sender, _to, _amount);
     }
 
-    function _withdrawFromTo(address _from, address _to, uint _amount) internal {
+    function _withdrawFromTo(address _from, address _to, uint256 _amount) internal {
         bytes32 fromData = _useAllowance(_from, _amount);
         _withdrawDirectFromTo(fromData, _from, _to, _amount);
     }
 
-    function _transfer(bytes32 _fromData, address _from, address _to, uint _amount) internal {
+    function _transfer(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
         assembly {
             // Checks for zero-address.
             returndatacopy(returndatasize(), returndatasize(), iszero(_to))
@@ -386,7 +385,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function _useAllowance(address _from, uint _amount) internal returns (bytes32 fromData) {
+    function _useAllowance(address _from, uint256 _amount) internal returns (bytes32 fromData) {
         assembly {
             fromData := sload(_from)
 
@@ -417,7 +416,7 @@ contract YAM_WETH is Multicallable {
         }
     }
 
-    function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint _amount) internal {
+    function _withdrawDirectFromTo(bytes32 _fromData, address _from, address _to, uint256 _amount) internal {
         assembly {
             // Check balance.
             if gt(_amount, and(_fromData, BALANCE_MASK)) {
