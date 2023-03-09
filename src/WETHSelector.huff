@@ -1,0 +1,94 @@
+#define macro SELECTOR(zero) = takes(0) returns(1) {
+    <zero> calldataload 0xe0 shr
+}
+
+#define constant DEST_SEQ = 0x2fb000000000000059c00000000000006a300000000000009300
+#define constant S_MASK = 0x31c00000 // => 00110001110000000000000000000000
+#define constant S_SHIFT = 0x16 // 22
+#define constant DEST_MASK = 0x1f0
+
+#define macro FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+    <selector> eq <final_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop
+}
+
+#define macro NO_MATCH() = takes(0) returns(0) {
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop stop stop stop stop stop stop
+}
+
+#define macro RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
+    calldatasize iszero <deposit_dest> jumpi
+    returndatasize returndatasize revert
+    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    stop stop stop stop stop stop
+}
+
+#define macro MAIN() = takes(0) returns(0) {
+    // -- Selector Switch Head
+    // Since the switch is exactly 48 bytes large no padding is required
+    SELECTOR(pc)        // [sel]
+    [DEST_SEQ]          // [lab_seq, sel]
+    dup2 [S_MASK] and   // [unique_sel_bits, lab_seq, sel]
+    [S_SHIFT] shr       // [i, lab_seq, sel]
+    shr [DEST_MASK] and // [dest, sel]
+    jump
+
+    // The `JUMPDEST` bytes will be at the positions of the label.
+    // Selector comparison necessary to protect against collisions with other functions.
+    dest_0x030: FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
+    dest_0x040: NO_MATCH()
+    dest_0x050: NO_MATCH()
+    dest_0x060: FUNC_CHECK(0x06fdde03, name_final_dest)
+    dest_0x070: FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0x080: NO_MATCH()
+    dest_0x090: FUNC_CHECK(0x095ea7b3, approve_final_dest)
+    dest_0x0a0: FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0x0b0: NO_MATCH()
+    dest_0x0c0: NO_MATCH()
+    dest_0x0d0: FUNC_CHECK(0x95d89b41, symbol_final_dest)
+    dest_0x0e0: FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
+    dest_0x0f0: FUNC_CHECK(0x313ce567, decimals_final_dest)
+    dest_0x100: RECEIVE_CHECK(deposit_final_dest)
+    dest_0x110: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
+    dest_0x120: FUNC_CHECK(0x87f8ab26, depositAmount_final_dest)
+    dest_0x130: NO_MATCH()
+    dest_0x140: FUNC_CHECK(0xd0e30db0, deposit_final_dest)
+    dest_0x150: FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
+    dest_0x160: FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
+    dest_0x170: FUNC_CHECK(0xb760faf9, depositTo_final_dest)
+    dest_0x180: FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
+    dest_0x190: FUNC_CHECK(0xa9059cbb, transfer_final_dest)
+    dest_0x1a0: NO_MATCH()
+    dest_0x1b0: FUNC_CHECK(0xb2069e40, depositAmountTo_final_dest)
+    dest_0x1c0: FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
+    dest_0x1d0: FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0x1e0: FUNC_CHECK(0x70a08231, balanceOf_final_dest)
+    dest_0x1f0: FUNC_CHECK(0x7ecebe00, nonces_final_dest)
+
+    // Final function destinations
+    name_final_dest:
+    symbol_final_dest:
+    decimals_final_dest:
+    totalSupply_final_dest:
+    transferFrom_final_dest:
+    transfer_final_dest:
+    balanceOf_final_dest:
+    approve_final_dest:
+    allowance_final_dest:
+    deposit_final_dest:
+    depositTo_final_dest:
+    depositAmountTo_final_dest:
+    depositAmount_final_dest:
+    withdraw_final_dest:
+    withdrawTo_final_dest:
+    withdrawFrom_final_dest:
+    withdrawFromTo_final_dest:
+    DOMAIN_SEPARATOR_final_dest:
+    nonces_final_dest:
+    permit_final_dest:
+    multicall_final_dest:
+}
