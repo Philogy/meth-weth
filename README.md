@@ -16,14 +16,21 @@ difference between the native ETH asset and fungible [ERC20](https://eips.ethere
 
 Comparison may improve in favor of _METH_ if more optimizations are found.
 
+
 ### Direct Calls
 This table contains a comparison of gas costs for limited function calls.
 
-|Method|WETH9|METH|Difference|Added Details|
+|Action|WETH9|METH|Difference|Added Details|
 |------|-----|----|----------|-------------|
 |`deposit()`|45,038|44,628|-410|Wrap non-zero amount with no existing balance|
-|`transfer()`|46,734|45,790|-944|Transfer to account with zero balance|
-|receive-fallback|44,731|44,563|-168|Wrap non-zero amount with no existing balance|
+|`transfer(...)`|51,534|50,590|-944|Transfer to account with zero balance|
+|receive-fallback|27,631|27,463|-168|Wrap non-zero amount with no existing balance|
+|`approve(...)`|46,364|45,981|-383|Grant non-zero allowance with no existing allowance|
+|`withdraw(...)`|35,144|34,535|-609|Unwrap specific amount|
+|`transferFrom(...)`|36,965|36,059|-906|Transfer from non-zero to non-zero with infinite approval|
+|`transferFrom(...)`|35,688|34,188|-1,500|Transfer from non-zero to non-zero with finite approval|
+|withdraw all remaining balance|30,344|29,570|-774|Unwrap all remaining (`withdraw(uint)` in WETH, `withdrawAll()` in METH)|
+
 
 
 ## ✅ Why METH over WETH9?
