@@ -28,7 +28,13 @@ contract BenchmarkScript is Test, Script {
         _weth.deposit{value: 20 wei}();
         _weth.transfer(vm.addr(TEST_PKEY1), 1 wei);
         address(_weth).call{value: 1 wei}("");
-        _weth.approve(vm.addr(TEST_PKEY1), type(uint256).max);
+        if (address(_weth) == WETH9) {
+            _weth.approve(vm.addr(TEST_PKEY1), type(uint256).max);
+        } else {
+            address(_weth).call(
+                abi.encodePacked(_weth.approve.selector, uint256(uint160(vm.addr(TEST_PKEY1))), uint8(0xff))
+            );
+        }
         _weth.withdraw(5 wei);
         vm.stopBroadcast();
 

@@ -25,7 +25,7 @@ This table contains a comparison of gas costs for limited function calls.
 |`deposit()`|45,038|44,628|-410|Wrap non-zero amount with no existing balance|
 |`transfer(...)`|51,534|50,590|-944|Transfer to account with zero balance|
 |receive-fallback|27,631|27,463|-168|Wrap non-zero amount with no existing balance|
-|`approve(...)`|46,364|45,981|-383|Grant non-zero allowance with no existing allowance|
+|`approve(...)`|46,364|45,485|-879|Grant infinite allowance (requires truncating calldata for METH)|
 |`withdraw(...)`|35,144|34,535|-609|Unwrap specific amount|
 |`transferFrom(...)`|36,965|36,059|-906|Transfer from non-zero to non-zero with infinite approval|
 |`transferFrom(...)`|35,688|34,188|-1,500|Transfer from non-zero to non-zero with finite approval|
