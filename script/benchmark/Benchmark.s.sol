@@ -3,18 +3,9 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
-import {IERC20} from "../../src/interfaces/IERC20.sol";
 import {HuffDeployer} from "../../test/utils/HuffDeployer.sol";
 import {IMETH} from "../../src/interfaces/IMETH.sol";
-
-// Base interface
-interface IWETH is IERC20 {
-    function deposit() external payable;
-    function withdraw(uint256) external;
-
-    event Deposit(address indexed to, uint256 amount);
-    event Withdrawal(address indexed from, uint256 amount);
-}
+import {IWETH9} from "../../src/interfaces/IWETH9.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract BenchmarkScript is Test, Script {
@@ -26,11 +17,11 @@ contract BenchmarkScript is Test, Script {
     address internal immutable REC1 = makeAddr("rec1");
 
     function run() public {
-        _runOn(IWETH(WETH9));
-        _runOn(IWETH(METH));
+        _runOn(IWETH9(WETH9));
+        _runOn(IWETH9(METH));
     }
 
-    function _runOn(IWETH _weth) internal {
+    function _runOn(IWETH9 _weth) internal {
         uint256 mainPkey = vm.envUint("PRIV_KEY");
         vm.startBroadcast(mainPkey);
 
@@ -45,7 +36,7 @@ contract BenchmarkScript is Test, Script {
         _weth.transferFrom(vm.addr(mainPkey), vm.addr(TEST_PKEY1), 3 wei);
         vm.stopBroadcast();
 
-        uint fullTransferFromAmount = 5 wei;
+        uint256 fullTransferFromAmount = 5 wei;
         vm.startBroadcast(mainPkey);
         _weth.approve(vm.addr(TEST_PKEY1), fullTransferFromAmount);
         vm.stopBroadcast();
