@@ -1,2 +1,3 @@
 solady/=lib/solady/src/
 foundry-huff/=lib/foundry-huff/src/
+smol-huff-deployer/=lib/smol-huff-deployer/src/

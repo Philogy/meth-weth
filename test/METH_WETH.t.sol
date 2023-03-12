@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
-import {HuffDeployer} from "./utils/HuffDeployer.sol";
+import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 import {IMETH} from "../src/interfaces/IMETH.sol";
 import {LibString} from "solady/utils/LibString.sol";
 

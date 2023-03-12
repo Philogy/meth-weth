@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {Script} from "forge-std/Script.sol";
 import {Test} from "forge-std/Test.sol";
-import {HuffDeployer} from "../../test/utils/HuffDeployer.sol";
+import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract DeployMethScript is Script, Test {

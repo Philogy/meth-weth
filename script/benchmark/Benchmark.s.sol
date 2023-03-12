@@ -3,7 +3,7 @@ pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {Script} from "forge-std/Script.sol";
-import {HuffDeployer} from "../../test/utils/HuffDeployer.sol";
+import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 import {IMETH} from "../../src/interfaces/IMETH.sol";
 import {IWETH9} from "../../src/interfaces/IWETH9.sol";
 
