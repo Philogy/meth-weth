@@ -1,3 +1,0 @@
-#define macro MAIN() = takes(0) returns(0) {
-    stop stop
-}
