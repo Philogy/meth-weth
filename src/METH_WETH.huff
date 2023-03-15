@@ -7,11 +7,11 @@
 
 // -- Base Contract Constants
 // ---- Immutable offset constants
-// @custom:post-compile
-#define constant DS_LOC1 = 0x176d
-// @custom:post-compile
-#define constant DS_LOC2 = 0x184a
-// @custom:post-compile
+/// TODO: Set
+#define constant DS_LOC1 = 0x1733
+/// TODO: Set
+#define constant DS_LOC2 = 0x1810
+/// TODO: Set
 #define constant CSTR_SIZE = 0x8e
 
 // ---- Selector Switch Constants
@@ -177,22 +177,16 @@
     // returns:                        [amount]
 }
 
-#define macro NON_PAYABLE() = takes(0) returns(0) {
-    callvalue ASSERT_ZERO()
-}
-
-// Check whether top stack element is 0 and whether callvalue sent
-#define macro NON_ZERO_PAYABLE() = takes(1) returns(1) {
+#define macro NON_ZERO() = takes(1) returns(1) {
     // takes:        [value_not_zero]
     dup1 iszero   // [value_not_zero == 0, value_not_zero]
-    callvalue or  // [msg.value || value_not_zero == 0, value_not_zero]
     ASSERT_ZERO() // [value_not_zero]
     // returns:      [value_not_zero]
 }
+
 // -- External Functions
 // ---- Metadata / Global Methods
 #define macro _NAME_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     // "Maximally Efficient Wrapped Ether" (len: 33)
     0x6572 0x41 mstore
     0x214d6178696d616c6c7920456666696369656e74205772617070656420457468 0x3f mstore
@@ -201,7 +195,6 @@
 }
 
 #define macro _SYMBOL_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     // "METH"
     0x044d455448 0x24 mstore
     0x20 <zero> mstore
@@ -209,25 +202,21 @@
 }
 
 #define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     [DECIMALS] RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     selfbalance RETURN_WORD(<zero>, msize)
 }
 
 // ---- Transfer related methods
 #define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     0x04 LOAD_ADDRESS() // [account]
     LOAD_BALANCE()      // [account.bal]
     RETURN_WORD(<zero>, msize)
 }
 
 #define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     // -- Load & Verify Params
     0x04 LOAD_ADDRESS() // [to]
     caller              // [msg.sender, to]
@@ -260,15 +249,12 @@
 }
 
 #define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
-
     APPROVE(<zero>)
 
     RETURN_TRUE(<zero>, 0x20)
 }
 
 #define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
     msize mstore       // [spender]
@@ -305,7 +291,6 @@
 }
 
 #define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     // -- Load & Verify Params.
     0x24 LOAD_ADDRESS() // [to]
     0x04 calldataload   // [from, to]
@@ -387,10 +372,8 @@
     0x04 calldataload        // [amount, 0, 0, 0, 0]
     caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
     BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
-    // Return callvalue incase accidentally sent.
-    callvalue add            // [amount, 0, 0, 0, 0]
     caller                   // [msg.sender, amount, 0, 0, 0, 0]
-    SEND_ETH(0x00)           // []
+    SEND_ETH(<zero>)         // []
     stop
 }
 
@@ -403,8 +386,8 @@
     BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
     // -- Transfer ETH
     0x04 calldataload        // [to, amount, 0, 0, 0, 0]
-    NON_ZERO_PAYABLE()       // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(callvalue)      // []
+    NON_ZERO()               // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(<zero>)         // []
     stop
 }
 
@@ -413,11 +396,9 @@
     PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
     // -- Update balance and emit event.
     WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
-    // Return callvalue incase accidentally sent.
-    callvalue add        // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     caller               // [msg.sender, amount, 0, 0, 0, 0]
-    SEND_ETH(0x00)       // []
+    SEND_ETH(<zero>)     // []
     stop
 }
 
@@ -428,8 +409,8 @@
     WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     0x04 calldataload    // [to, amount, 0, 0, 0, 0]
-    NON_ZERO_PAYABLE()   // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(callvalue)  // []
+    NON_ZERO()           // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(<zero>)     // []
     stop
 }
 
@@ -455,12 +436,10 @@
     // returns:                 []
 }
 
-#define macro WITHDRAW_FROM(zero, zero2) = takes(7) returns(0) {
+#define macro WITHDRAW_FROM(zero) = takes(7) returns(0) {
     // takes:             [amount, from, amount, 0, 0, 0, 0]
 
     BURN_FROM(<zero>)  // [amount, 0, 0, 0, 0]
-    // Return callvalue incase accidentally sent.
-    callvalue add      // [amount, 0, 0, 0, 0]
     caller             // [msg.sender, amount, 0, 0, 0, 0]
     SEND_ETH(<zero>)   // []
 }
@@ -474,22 +453,22 @@
 
     USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
         //                     [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM(<zero>, 0x00)
+        WITHDRAW_FROM(<zero>)
         stop
     withdraw_from_allowed_2pop:
         //                     [_, _, amount, from, amount, 0, 0, 0, 0]
         pop pop             // [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM(<zero>, 0x00)
+        WITHDRAW_FROM(<zero>)
         stop
 }
 
-#define macro WITHDRAW_FROM_TO(zero, zero2) = takes(7) returns(0) {
+#define macro WITHDRAW_FROM_TO(zero) = takes(7) returns(0) {
     // takes:                    [amount, from, amount, 0, 0, 0, 0]
 
     BURN_FROM(<zero>)         // [amount, 0, 0, 0, 0]
     0x24 calldataload         // [to, amount, 0, 0, 0, 0]
-    NON_ZERO_PAYABLE()        // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(callvalue)       // []
+    NON_ZERO()                // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(<zero>)          // []
 }
 
 #define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
@@ -577,20 +556,16 @@
     <zero> mload                     // [recovered_signer, owner]
     // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
-    // Callvalue check grouped in here to save gas.
-    callvalue or                     // [msg.value || owner != recovered_signer ]
     // Prevent cross-chain replays.
-    IS_FORK() or                     // [is_fork || msg.value || owner != recovered_signer]
+    IS_FORK() or                     // [is_fork || owner != recovered_signer]
     invalid_signature_error jumpi    // []
     stop
 }
 
-
 #define macro _MULTICALL_EXTERNAL(zero) = takes(0) returns(0) {
-    callvalue                        // [msg.value]
-    0x04 calldataload                // [base_offset, msg.value]
-    0x20 sub                         // [base_offset != 0x20, msg.value]
-    or ASSERT_ZERO()                 // []
+    0x04 calldataload                // [base_offset]
+    0x20 sub                         // [base_offset != 0x20]
+    ASSERT_ZERO()                    // []
 
     0x24 calldataload                // [total_calls]
 
@@ -656,7 +631,6 @@
 }
 
 #define macro _RESCUE_LOST_EXTERNAL(zero) = takes(0) returns(0) {
-    NON_PAYABLE()
     // Load lost tokens.
     <zero>  LOAD_BALANCE()       // [0.bal]
     address LOAD_BALANCE()       // [this.balance, 0.bal]
@@ -697,7 +671,7 @@
 #define macro CONSTRUCTOR() = takes(0) returns(0) {
     IS_FORK() ASSERT_ZERO()
     COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize)
-    [CSTR_SIZE] dup1      // [constructor_size, domain_separator]
+    [CSTR_SIZE] dup1      // [cstr_size, cstr_size, domain_separator]
     codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
     sub                   // [runtime_size, cstr_size, domain_separator]
     dup1 swap2            // [cstr_size, runtime_size, runtime_size, domain_separator]
@@ -713,11 +687,16 @@
     <zero> calldataload 0xe0 shr
 }
 
-#define macro FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+#define macro PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
     <selector> eq <final_dest> jumpi
     returndatasize returndatasize revert
     // Padding to make sure block is 16 bytes large (including JUMPDEST).
     stop stop
+}
+
+#define macro NON_PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+    <selector> eq callvalue lt <final_dest> jumpi
+    returndatasize returndatasize revert
 }
 
 #define macro NO_MATCH() = takes(0) returns(0) {
@@ -751,10 +730,10 @@
     dest_0x03f: NO_MATCH()
     dest_0x04f: NO_MATCH()
     dest_0x05f: NO_MATCH()
-    dest_0x06f: FUNC_CHECK(0x06fdde03, name_final_dest)
+    dest_0x06f: NON_PAYABLE_FUNC_CHECK(0x06fdde03, name_final_dest)
     dest_0x07f: NO_MATCH()
     dest_0x08f: NO_MATCH()
-    dest_0x09f: FUNC_CHECK(0x095ea7b3, approve_final_dest)
+    dest_0x09f: NON_PAYABLE_FUNC_CHECK(0x095ea7b3, approve_final_dest)
     dest_0x0af: NO_MATCH()
     dest_0x0bf: NO_MATCH()
     dest_0x0cf: NO_MATCH()
@@ -769,7 +748,7 @@
     dest_0x15f: NO_MATCH()
     dest_0x16f: NO_MATCH()
     dest_0x17f: NO_MATCH()
-    dest_0x18f: FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
+    dest_0x18f: NON_PAYABLE_FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
     dest_0x19f: NO_MATCH()
     dest_0x1af: NO_MATCH()
     dest_0x1bf: NO_MATCH()
@@ -777,29 +756,29 @@
     dest_0x1df: NO_MATCH()
     dest_0x1ef: NO_MATCH()
     dest_0x1ff: NO_MATCH()
-    dest_0x20f: FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
+    dest_0x20f: NON_PAYABLE_FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
     dest_0x21f: NO_MATCH()
     dest_0x22f: NO_MATCH()
-    dest_0x23f: FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
+    dest_0x23f: NON_PAYABLE_FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
     dest_0x24f: NO_MATCH()
     dest_0x25f: NO_MATCH()
     dest_0x26f: NO_MATCH()
     dest_0x27f: NO_MATCH()
-    dest_0x28f: FUNC_CHECK(0x28026ace, depositAndApprove_final_dest)
+    dest_0x28f: PAYABLE_FUNC_CHECK(0x28026ace, depositAndApprove_final_dest)
     dest_0x29f: NO_MATCH()
     dest_0x2af: NO_MATCH()
     dest_0x2bf: NO_MATCH()
     dest_0x2cf: NO_MATCH()
     dest_0x2df: NO_MATCH()
-    dest_0x2ef: FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
+    dest_0x2ef: NON_PAYABLE_FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
     dest_0x2ff: NO_MATCH()
     dest_0x30f: NO_MATCH()
-    dest_0x31f: FUNC_CHECK(0x313ce567, decimals_final_dest)
+    dest_0x31f: NON_PAYABLE_FUNC_CHECK(0x313ce567, decimals_final_dest)
     dest_0x32f: NO_MATCH()
     dest_0x33f: NO_MATCH()
     dest_0x34f: NO_MATCH()
     dest_0x35f: NO_MATCH()
-    dest_0x36f: FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0x36f: NON_PAYABLE_FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
     dest_0x37f: NO_MATCH()
     dest_0x38f: NO_MATCH()
     dest_0x39f: NO_MATCH()
@@ -815,11 +794,11 @@
     dest_0x43f: NO_MATCH()
     dest_0x44f: NO_MATCH()
     dest_0x45f: NO_MATCH()
-    dest_0x46f: FUNC_CHECK(0x4648b24c, rescueLost_final_dest)
+    dest_0x46f: NON_PAYABLE_FUNC_CHECK(0x4648b24c, rescueLost_final_dest)
     dest_0x47f: NO_MATCH()
     dest_0x48f: NO_MATCH()
     dest_0x49f: NO_MATCH()
-    dest_0x4af: FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
+    dest_0x4af: NON_PAYABLE_FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
     dest_0x4bf: NO_MATCH()
     dest_0x4cf: NO_MATCH()
     dest_0x4df: NO_MATCH()
@@ -857,7 +836,7 @@
     dest_0x6df: NO_MATCH()
     dest_0x6ef: NO_MATCH()
     dest_0x6ff: NO_MATCH()
-    dest_0x70f: FUNC_CHECK(0x70a08231, balanceOf_final_dest)
+    dest_0x70f: NON_PAYABLE_FUNC_CHECK(0x70a08231, balanceOf_final_dest)
     dest_0x71f: NO_MATCH()
     dest_0x72f: NO_MATCH()
     dest_0x73f: NO_MATCH()
@@ -871,14 +850,14 @@
     dest_0x7bf: NO_MATCH()
     dest_0x7cf: NO_MATCH()
     dest_0x7df: NO_MATCH()
-    dest_0x7ef: FUNC_CHECK(0x7ecebe00, nonces_final_dest)
+    dest_0x7ef: NON_PAYABLE_FUNC_CHECK(0x7ecebe00, nonces_final_dest)
     dest_0x7ff: NO_MATCH()
     dest_0x80f: NO_MATCH()
     dest_0x81f: NO_MATCH()
     dest_0x82f: NO_MATCH()
     dest_0x83f: NO_MATCH()
     dest_0x84f: NO_MATCH()
-    dest_0x85f: FUNC_CHECK(0x853828b6, withdrawAll_final_dest)
+    dest_0x85f: NON_PAYABLE_FUNC_CHECK(0x853828b6, withdrawAll_final_dest)
     dest_0x86f: NO_MATCH()
     dest_0x87f: NO_MATCH()
     dest_0x88f: NO_MATCH()
@@ -893,8 +872,8 @@
     dest_0x91f: NO_MATCH()
     dest_0x92f: NO_MATCH()
     dest_0x93f: NO_MATCH()
-    dest_0x94f: FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
-    dest_0x95f: FUNC_CHECK(0x95d89b41, symbol_final_dest)
+    dest_0x94f: NON_PAYABLE_FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
+    dest_0x95f: NON_PAYABLE_FUNC_CHECK(0x95d89b41, symbol_final_dest)
     dest_0x96f: NO_MATCH()
     dest_0x97f: NO_MATCH()
     dest_0x98f: NO_MATCH()
@@ -914,10 +893,10 @@
     dest_0xa6f: NO_MATCH()
     dest_0xa7f: NO_MATCH()
     dest_0xa8f: NO_MATCH()
-    dest_0xa9f: FUNC_CHECK(0xa9059cbb, transfer_final_dest)
+    dest_0xa9f: NON_PAYABLE_FUNC_CHECK(0xa9059cbb, transfer_final_dest)
     dest_0xaaf: NO_MATCH()
     dest_0xabf: NO_MATCH()
-    dest_0xacf: FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0xacf: NON_PAYABLE_FUNC_CHECK(0xac9650d8, multicall_final_dest)
     dest_0xadf: NO_MATCH()
     dest_0xaef: NO_MATCH()
     dest_0xaff: NO_MATCH()
@@ -928,7 +907,7 @@
     dest_0xb4f: NO_MATCH()
     dest_0xb5f: NO_MATCH()
     dest_0xb6f: NO_MATCH()
-    dest_0xb7f: FUNC_CHECK(0xb760faf9, depositTo_final_dest)
+    dest_0xb7f: PAYABLE_FUNC_CHECK(0xb760faf9, depositTo_final_dest)
     dest_0xb8f: NO_MATCH()
     dest_0xb9f: NO_MATCH()
     dest_0xbaf: NO_MATCH()
@@ -947,18 +926,18 @@
     dest_0xc7f: NO_MATCH()
     dest_0xc8f: NO_MATCH()
     dest_0xc9f: NO_MATCH()
-    dest_0xcaf: FUNC_CHECK(0xca9add8f, withdrawAllTo_final_dest)
+    dest_0xcaf: NON_PAYABLE_FUNC_CHECK(0xca9add8f, withdrawAllTo_final_dest)
     dest_0xcbf: NO_MATCH()
     dest_0xccf: NO_MATCH()
     dest_0xcdf: NO_MATCH()
     dest_0xcef: NO_MATCH()
     dest_0xcff: NO_MATCH()
-    dest_0xd0f: FUNC_CHECK(0xd0e30db0, deposit_final_dest)
+    dest_0xd0f: PAYABLE_FUNC_CHECK(0xd0e30db0, deposit_final_dest)
     dest_0xd1f: NO_MATCH()
     dest_0xd2f: NO_MATCH()
     dest_0xd3f: NO_MATCH()
     dest_0xd4f: NO_MATCH()
-    dest_0xd5f: FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0xd5f: NON_PAYABLE_FUNC_CHECK(0xd505accf, permit_final_dest)
     dest_0xd6f: NO_MATCH()
     dest_0xd7f: NO_MATCH()
     dest_0xd8f: NO_MATCH()
@@ -966,7 +945,7 @@
     dest_0xdaf: NO_MATCH()
     dest_0xdbf: NO_MATCH()
     dest_0xdcf: NO_MATCH()
-    dest_0xddf: FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
+    dest_0xddf: NON_PAYABLE_FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
     dest_0xdef: NO_MATCH()
     dest_0xdff: NO_MATCH()
     dest_0xe0f: NO_MATCH()
