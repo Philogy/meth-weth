@@ -2,7 +2,6 @@ import sys
 from sha3 import keccak_256
 import re
 import subprocess
-import pyperclip
 
 IMMUTABLES = [
     'meth.placeholders.domainSeparator'

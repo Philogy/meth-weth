@@ -549,7 +549,7 @@
     // Copy v, r, s at once into memory.
     0x60 0x84 0x20 calldatacopy      // [owner]
     0x20 <zero> 0x80 <zero>          // [0, 0x80, 0, 0x20, owner]
-    chainid                          // [1, 0, 0x80, 0, 0x20, owner]
+    chainid                          // [ecrecover_precompile_addr, 0, 0x80, 0, 0x20, owner]
     gas staticcall                   // [success, owner]
     pop                              // [owner]
      // If ecrecover failed no data will be returned and mem[0:0x20] will be the message hash.
