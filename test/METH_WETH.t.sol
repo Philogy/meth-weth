@@ -266,6 +266,7 @@ contract METH_WETHTest is Test {
         // Non-view methods
         _testNonPayable(meth.withdraw.selector, abi.encode(uint256(0)));
         _testNonPayable(meth.withdrawTo.selector, abi.encode(vm.addr(3), uint256(0)));
+        _testNonPayable(meth.withdrawAll.selector, "");
     }
 
     function _testNonPayable(bytes4 _selector, bytes memory _addedData) internal {
