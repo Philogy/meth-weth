@@ -690,26 +690,53 @@
 #define macro PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
     <selector> eq <final_dest> jumpi
     returndatasize returndatasize revert
-    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    // Padding to make sure block is 16 bytes large post compilation.
     stop stop
+    /*
+    JUMPDEST          PUSH4             SELECTOR_BYTE_1   SELECTOR_BYTE_2
+    SELECTOR_BYTE_3   SELECTOR_BYTE_4   EQ                PUSH2
+    DEST_BYTE_1       DEST_BYTE_2       JUMPI             RETURNDATASIZE
+    RETURNDATASIZE    REVERT            STOP              STOP
+    */
 }
 
 #define macro NON_PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
     <selector> eq callvalue lt <final_dest> jumpi
     returndatasize returndatasize revert
+    /*
+    No padding as non-payable check block is exactly 16-bytes large post-compile:
+    JUMPDEST          PUSH4             SELECTOR_BYTE_1   SELECTOR_BYTE_2
+    SELECTOR_BYTE_3   SELECTOR_BYTE_4   EQ                CALLVALUE
+    LT                PUSH2             DEST_BYTE_1       DEST_BYTE_2
+    JUMPI             RETURNDATASIZE    RETURNDATASIZE    REVERT
+    */
 }
 
 #define macro NO_MATCH() = takes(0) returns(0) {
     returndatasize returndatasize revert
-    // Padding to make sure block is 16 bytes large (including JUMPDEST).
-    stop stop stop stop stop stop stop stop stop stop stop stop
+    // Padding to make sure block is 16 bytes large post compilation.
+    stop stop stop stop
+    stop stop stop stop
+    stop stop stop stop
+    /*
+    JUMPDEST          RETURNDATASIZE    RETURNDATASIZE    REVERT
+    STOP              STOP              STOP              STOP
+    STOP              STOP              STOP              STOP
+    STOP              STOP              STOP              STOP
+    */
 }
 
 #define macro RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
     calldatasize iszero <deposit_dest> jumpi
     returndatasize returndatasize revert
-    // Padding to make sure block is 16 bytes large (including JUMPDEST).
+    // Padding to make sure block is 16 bytes large post compilation.
     stop stop stop stop stop stop
+    /*
+    JUMPDEST          CALLDATASIZE      ISZERO            PUSH2
+    DEST_BYTE_1       DEST_BYTE_2       JUMPI             RETURNDATASIZE
+    RETURNDATASIZE    REVERT            STOP              STOP
+    STOP              STOP              STOP              STOP
+    */
 }
 
 #define macro _MAIN(zero) = takes(0) returns(0) {
@@ -1000,6 +1027,7 @@
         _APPROVE_EXTERNAL(<zero>)
     allowance_final_dest:
         _ALLOWANCE_EXTERNAL(<zero>)
+    // For payable functions `RETURNDATASIZE` is used as 2 gas `PUSH0` instead of `CALLVALUE`
     deposit_final_dest:
         _DEPOSIT_EXTERNAL(returndatasize)
     depositTo_final_dest:
@@ -1042,5 +1070,6 @@
 }
 
 #define macro MAIN() = takes(0) returns(0) {
-  _MAIN(callvalue)
+    // `CALLVALUE` is checked to be zero as part of the non-payable function checks
+    _MAIN(callvalue)
 }
