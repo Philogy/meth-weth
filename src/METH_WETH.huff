@@ -1,119 +1,109 @@
-// -- Base constants
-// If changed for alternative chain, replace use of CHAINID in `permit`.
-#define constant MAINNET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
+#include "./interfaces/IMETH.huff"
+
+////////////////////////////////////////////////////////////////
+//                   BASE CONSTANTS                           //
+////////////////////////////////////////////////////////////////
+/// @notice If changed for alternative chain, replace use of `CHAINID` as "push 1" in `permit`.
+#define constant TARGET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant INF_ALLOW_LIM = 0xfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
 
-// -- Base Contract Constants
-// ---- Immutable offset constants
+////////////////////////////////////////////////////////////////
+//               CONSTRUCTOR PARAMETERS                       //
+////////////////////////////////////////////////////////////////
 /// TODO: Set
 #define constant DS_LOC1 = 0x1733
 /// TODO: Set
 #define constant DS_LOC2 = 0x1810
 /// TODO: Set
-#define constant CSTR_SIZE = 0x8e
+#define constant CSTR_SIZE = 0x97
 
-// ---- Selector Switch Constants
+////////////////////////////////////////////////////////////////
+//             SELECTOR SWITCH CONSTANTS                      //
+////////////////////////////////////////////////////////////////
+/// @dev Right bit shift that retrieves the unique upper bits of all selectors contained within the ABI.
 #define constant S_SHIFT = 0x14 // 20
 #define constant S_COVER = 0x0f // 15 (1111_2)
-// ---- Storage Layout Constants
+
+////////////////////////////////////////////////////////////////
+//              STORAGE LAYOUT CONSTANTS                      //
+////////////////////////////////////////////////////////////////
 /// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
-#define constant BALANCE_MASK = 0xffffffffffffffffffffffffffffffff
-#define constant NONCE_MASK = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
+#define constant BALANCE_MASK    = 0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff
+#define constant NONCE_MASK      = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
+#define constant NONCE_INCREMENT = 0x0000000000000000000000000000000100000000000000000000000000000000
 #define constant NONCE_SHIFT = 0x80
-#define constant NONCE_INCREMENT = 0x0100000000000000000000000000000000
-#define constant DECIMALS = 0x12 // 18
-// The only "special" thing the recovery contract can do is receive tokens that were accidentally sent to the zero address or the contract itself
+
+
+////////////////////////////////////////////////////////////////
+//                 METADATA CONSTANTS                         //
+////////////////////////////////////////////////////////////////
+// ================== Decimals ===================
+/// @dev METH has 18 decimals meaning a balance of `1120000000000000000` should be displayed as `1.12`.
+#define constant DECIMALS = 0x12
+// ==================== Name =====================
+// name.length ++ "M"
+#define constant PACKED_NAME_1        = 0x214d
+#define constant PACKED_NAME_OFFSET_1 = 0x21
+// "aximally Efficient Wrapped Ether"
+#define constant PACKED_NAME_2        = 0x6178696d616c6c7920456666696369656e742057726170706564204574686572
+#define constant PACKED_NAME_OFFSET_2 = 0x41
+// =================== Symbol ====================
+// symbol.length ++ "METH"
+#define constant PACKED_SYMBOL_1 = 0x044d455448
+#define constant PACKED_SYMBOL_OFFSET_1 = 0x24
+
+/// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and this addresses.
 #define constant RECOVERY_ADDR = 0x1212121212121212121212121212121212121212
 
-// -- ABI Constants
-// ---- Functions
-// ---- Functions -- Metadata
-#define function name() view returns (string)
-#define function symbol() view returns (string)
-#define function decimals() view returns (uint8)
-// ---- Functions -- Global
-#define function totalSupply() view returns (uint256)
-// ---- Functions -- Transfer
-#define function transferFrom(address,address,uint256) payable returns (bool)
-#define function transfer(address, uint256) payable returns (bool)
-#define function balanceOf(address) view returns (uint256)
-// ---- Functions -- Allowance
-#define function approve(address,uint256) payable returns (bool)
-#define function allowance(address, address) view returns (uint256)
-// ---- Functions -- ERC2612 Permits
-#define function DOMAIN_SEPARATOR() view returns (bytes32)
-#define function nonces(address) view returns (uint256)
-#define function permit(address, address, uint256, uint256, uint8, bytes32, bytes32) payable returns ()
-// ---- Functions -- Utility
-#define function multicall(bytes[]) payable returns (bytes[])
-// ---- Functions -- Wrap
-#define function deposit() payable returns ()
-#define function depositTo(address) payable returns ()
-// ---- Functions -- Unwrap
-#define function withdraw(uint256) payable returns ()
-#define function withdrawTo(address, uint256) payable returns ()
-#define function withdrawAll() payable returns ()
-#define function withdrawAllTo(address) payable returns ()
-#define function withdrawFrom(address, uint256) payable returns ()
-#define function withdrawFromTo(address, address, uint256) payable returns ()
-
-// ---- Events
-#define event Transfer(address indexed, address indexed, uint256)
-#define event Deposit(address indexed, uint256)
-#define event Withdrawal(address indexed, uint256)
-#define event Approval(address indexed, address indexed, uint256)
-
-// ---- Errors
-#define error InsufficientBalance()
-#define error InsufficientAllowance()
-#define error PermitExpired()
-#define error InvalidSignature()
-
-// -- ERC712 Constants
-// keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
+////////////////////////////////////////////////////////////////
+//                      ERC721 CONSTANTS                      //
+////////////////////////////////////////////////////////////////
 #define constant ERC712_ENCODE_HEAD = 0x1901
+// keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
 #define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
 // keccak256("Maximally Efficient Wrapped Ether")
 #define constant NAME_HASH = 0x6b9cc4b039c15ca6983e30e9ce1bbda1e4a82bcb7f7c783fb83f0ef373da695a
-// keccak256("1.0")
-#define constant VERSION_HASH = 0xe6bbd6277e1bf288eed5e8d1780f9a50b239e86b153736bceebccf4ea79d90b3
+// keccak256("1")
+#define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
 #define constant DOMAIN_SEPARATOR_PLACEHOLDER = 0x4091cc981ab0391433dfcfc83900e539caf99b1ea50ebd1576d319483e4adeb4
-
 // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
 #define constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
 
 
-// -- Utility Functions
-#define macro ASSERT_ZERO() = takes(1) returns(0) {
-    // takes:    [cond]
-    returndatasize returndatasize returndatacopy
+#define macro _REQUIRE_NOT_ZERO(zero) = takes(1) returns(1) {
+    // takes:        [to]
+    dup1          // [to, to]
+    notzero jumpi // [to]
+        __FUNC_SIG(RecipientZero) _REVERT(<zero>)
+    not_zero:     // [to]
+    // returns:      [to]
 }
 
-#define macro LOAD_ADDRESS() = takes(1) returns(1) {
+#define macro _CLEAN_ADDRESS() = takes(1) returns(1) {
     // takes:             [calldata_pos]
     calldataload       // [addr_raw]
     [MAX_ADDR] and     // [addr]
     // returns:        // [addr]
 }
 
-#define macro REVERT(zero) = takes(1) returns(0) {
+#define macro _REVERT(zero) = takes(1) returns(0) {
     <zero> mstore
     0x04 0x1c return
 }
 
-#define macro RETURN_WORD(zero, word_size) = takes(1) returns(0) {
+#define macro _RETURN_WORD(zero, word_size) = takes(1) returns(0) {
     // takes:                    [x]
-    <zero> mstore             // []
+                <zero> mstore // []
     <word_size> <zero> return // []
 }
 
 #define macro RETURN_TRUE(zero, word_size) = takes(0) returns(0) {
-    0x1 RETURN_WORD(<zero>, <word_size>)
+    0x1 _RETURN_WORD(<zero>, <word_size>)
 }
 
-#define macro BUBBLE_REVERT(zero) = takes(1) returns(0) {
+#define macro _BUBBLE_REVERT(zero) = takes(1) returns(0) {
     // takes:             [success]
     no_bubble jumpi
         returndatasize <zero> <zero> returndatacopy
@@ -128,7 +118,7 @@
 #define macro SEND_ETH(zero) = takes(6) returns(0) {
     // takes:                [recipient, amount, 0, 0, 0, 0]
     gas call              // [success]
-    BUBBLE_REVERT(<zero>) // []
+    _BUBBLE_REVERT(<zero>) // []
     // returns:              []
 }
 
@@ -144,7 +134,7 @@
     <word_size> <zero> log3
 }
 
-#define macro TRANSFER(zero, word_size) = takes(5) returns(0) {
+#define macro _TRANSFER(zero, word_size) = takes(5) returns(0) {
     // takes:                  [from, amount, amount, from, to]
 
     // -- Update `from` Balance
@@ -177,61 +167,51 @@
     // returns:                        [amount]
 }
 
-#define macro NON_ZERO() = takes(1) returns(1) {
-    // takes:        [value_not_zero]
-    dup1 iszero   // [value_not_zero == 0, value_not_zero]
-    ASSERT_ZERO() // [value_not_zero]
-    // returns:      [value_not_zero]
-}
-
 // -- External Functions
 // ---- Metadata / Global Methods
-#define macro _NAME_EXTERNAL(zero) = takes(0) returns(0) {
-    // "Maximally Efficient Wrapped Ether" (len: 33)
-    0x6572 0x41 mstore
-    0x214d6178696d616c6c7920456666696369656e74205772617070656420457468 0x3f mstore
-    0x20 <zero> mstore
-    msize <zero> return
+#define macro NAME(zero) = takes(0) returns(0) {
+    // Store string offset.
+    0x20            <zero>                mstore
+    // Write packed string data to memory, including length.
+    [PACKED_NAME_1] [PACKED_NAME_OFFSET_1] mstore
+    [PACKED_NAME_2] [PACKED_NAME_OFFSET_2] mstore
+    msize           <zero>                 return
 }
 
-#define macro _SYMBOL_EXTERNAL(zero) = takes(0) returns(0) {
-    // "METH"
-    0x044d455448 0x24 mstore
-    0x20 <zero> mstore
-    msize <zero> return
+#define macro SYMBOL(zero) = takes(0) returns(0) {
+    0x20              <zero>                   mstore
+    [PACKED_SYMBOL_1] [PACKED_SYMBOL_OFFSET_1] mstore
+    msize             <zero>                   return
 }
 
-#define macro _DECIMALS_EXTERNAL(zero) = takes(0) returns(0) {
-    [DECIMALS] RETURN_WORD(<zero>, msize)
+#define macro DECIMALS(zero) = takes(0) returns(0) {
+    [DECIMALS] _RETURN_WORD(<zero>, msize)
 }
 
-#define macro _TOTAL_SUPPLY_EXTERNAL(zero) = takes(0) returns(0) {
-    selfbalance RETURN_WORD(<zero>, msize)
+#define macro TOTAL_SUPPLY(zero) = takes(0) returns(0) {
+    selfbalance _RETURN_WORD(<zero>, msize)
 }
 
 // ---- Transfer related methods
-#define macro _BALANCE_OF_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 LOAD_ADDRESS() // [account]
-    LOAD_BALANCE()      // [account.bal]
-    RETURN_WORD(<zero>, msize)
+#define macro BALANCE_OF(zero) = takes(0) returns(0) {
+    0x04 _CLEAN_ADDRESS() // [account]
+    LOAD_BALANCE()        // [account.bal]
+    _RETURN_WORD(<zero>, msize)
 }
 
-#define macro _TRANSFER_EXTERNAL(zero) = takes(0) returns(0) {
-    // -- Load & Verify Params
-    0x04 LOAD_ADDRESS() // [to]
-    caller              // [msg.sender, to]
-    0x24 calldataload   // [amount, msg.sender, to]
-
-    // -- Transfer
-    dup1 caller         // [msg.sender, amount, amount, msg.sender, to]
-    TRANSFER(<zero>, msize)
+#define macro TRANSFER(zero) = takes(0) returns(0) {
+    0x04 _CLEAN_ADDRESS() // [to]
+    caller                // [msg.sender, to]
+    0x24 calldataload     // [amount, msg.sender, to]
+    dup1 caller           // [msg.sender, amount, amount, msg.sender, to]
+    _TRANSFER(<zero>, msize)
 
     RETURN_TRUE(<zero>, msize)
 }
 
 #define macro APPROVE(zero) = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 LOAD_ADDRESS()    // [spender]
+    0x04 _CLEAN_ADDRESS()   // [spender]
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
@@ -248,20 +228,20 @@
     0x20 <zero> log3       // []
 }
 
-#define macro _APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro _APPROVE(zero) = takes(0) returns(0) {
     APPROVE(<zero>)
 
     RETURN_TRUE(<zero>, 0x20)
 }
 
-#define macro _ALLOWANCE_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro ALLOWANCE(zero) = takes(0) returns(0) {
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
     msize mstore       // [spender]
     msize mstore       // []
     msize <zero> sha3  // [allowance.slot]
     sload              // [allowance]
-    RETURN_WORD(<zero>, 0x20)
+    _RETURN_WORD(<zero>, 0x20)
 }
 
 
@@ -286,15 +266,15 @@
 #define macro TRANSFER_FROM_END(zero, word_size) = takes(3) returns(0) {
     // takes:             [amount, from, to]
     dup1 dup3          // [from, amount, amount, from, to]
-    TRANSFER(<zero>, <word_size>)
+    _TRANSFER(<zero>, <word_size>)
     RETURN_TRUE(<zero>, <word_size>)
 }
 
-#define macro _TRANSFER_FROM_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro TRANSFER_FROM(zero) = takes(0) returns(0) {
     // -- Load & Verify Params.
-    0x24 LOAD_ADDRESS() // [to]
-    0x04 calldataload   // [from, to]
-    0x44 calldataload   // [amount, from, to]
+    0x24 _CLEAN_ADDRESS() // [to]
+    0x04 calldataload    // [from, to]
+    0x44 calldataload    // [amount, from, to]
 
     // -- Verify Allowance
     USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
@@ -321,14 +301,14 @@
     caller EMIT_DEPOSIT(<zero>, msize)
 }
 
-#define macro _DEPOSIT_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro DEPOSIT(zero) = takes(0) returns(0) {
     DEPOSIT(<zero>)
     stop
 }
 
-#define macro _DEPOSIT_TO_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro DEPOSIT_TO(zero) = takes(0) returns(0) {
     // -- Load params.
-    0x04 LOAD_ADDRESS()     // [to]
+    0x04 _CLEAN_ADDRESS()    // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
@@ -337,7 +317,7 @@
     stop
 }
 
-#define macro _DEPOSIT_AND_APPROVE_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro DEPOSIT_AND_APPROVE(zero) = takes(0) returns(0) {
     DEPOSIT(<zero>)
     APPROVE(<zero>)
     stop
@@ -367,7 +347,7 @@
     EMIT_WITHDRAWAL(<zero>, msize)
 }
 
-#define macro _WITHDRAW_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW(zero) = takes(0) returns(0) {
     PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
     0x04 calldataload        // [amount, 0, 0, 0, 0]
     caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
@@ -377,7 +357,7 @@
     stop
 }
 
-#define macro _WITHDRAW_TO_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_TO(zero) = takes(0) returns(0) {
     // -- Setup stack.
     PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
     0x24 calldataload        // [amount, 0, 0, 0, 0]
@@ -386,12 +366,11 @@
     BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
     // -- Transfer ETH
     0x04 calldataload        // [to, amount, 0, 0, 0, 0]
-    NON_ZERO()               // [to, amount, 0, 0, 0, 0]
     SEND_ETH(<zero>)         // []
     stop
 }
 
-#define macro _WITHDRAW_ALL_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_ALL(zero) = takes(0) returns(0) {
     // -- Setup stack.
     PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
     // -- Update balance and emit event.
@@ -402,15 +381,15 @@
     stop
 }
 
-#define macro _WITHDRAW_ALL_TO_EXTERNAL(zero) = takes(0) returns(0) {
-    // -- Setup stack.
-    PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
+#define macro WITHDRAW_ALL_TO(zero) = takes(0) returns(0) {
+    // Push zeros before to avoid swaps later.
+    PUSH_4_ZEROS(<zero>)      // [0, 0, 0, 0]
     // -- Update balance and emit event.
-    WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
+    WITHDRAW_ALL(<zero>)      // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
-    0x04 calldataload    // [to, amount, 0, 0, 0, 0]
-    NON_ZERO()           // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)     // []
+    0x04 calldataload         // [to, amount, 0, 0, 0, 0]
+    _REQUIRE_NOT_ZERO(<zero>) // [to, amount, 0, 0, 0, 0]
+    SEND_ETH(<zero>)          // []
     stop
 }
 
@@ -444,7 +423,7 @@
     SEND_ETH(<zero>)   // []
 }
 
-#define macro _WITHDRAW_FROM_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_FROM(zero) = takes(0) returns(0) {
     // -- Load & Verify Params.
     PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
     0x24 calldataload       // [amount, 0, 0, 0, 0]
@@ -467,11 +446,10 @@
 
     BURN_FROM(<zero>)         // [amount, 0, 0, 0, 0]
     0x24 calldataload         // [to, amount, 0, 0, 0, 0]
-    NON_ZERO()                // [to, amount, 0, 0, 0, 0]
     SEND_ETH(<zero>)          // []
 }
 
-#define macro _WITHDRAW_FROM_TO_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_FROM_TO(zero) = takes(0) returns(0) {
     // Load & Verify Params.
 
     PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
@@ -490,23 +468,23 @@
         stop
 }
 
-#define macro IS_FORK() = takes(0) returns(1) {
-    [MAINNET_CHAIN_ID] chainid sub
+#define macro _IS_FORK() = takes(0) returns(1) {
+    [TARGET_CHAIN_ID] chainid sub
 }
 
-#define macro _DOMAIN_SEPARATOR_EXTERNAL(zero) = takes(0) returns(0) {
-    IS_FORK() ASSERT_ZERO()
-    [DOMAIN_SEPARATOR_PLACEHOLDER] RETURN_WORD(<zero>, msize)
+#define macro DOMAIN_SEPARATOR(zero) = takes(0) returns(0) {
+    _IS_FORK() fork_error jumpi
+    [DOMAIN_SEPARATOR_PLACEHOLDER] _RETURN_WORD(<zero>, msize)
 }
 
-#define macro _NONCES_EXTERNAL(zero) = takes(0) returns(0) {
-    0x04 LOAD_ADDRESS() // [account]
-    sload               // [account.data]
-    [NONCE_SHIFT] shr   // [account.nonce]
-    RETURN_WORD(<zero>, msize)
+#define macro NONCES(zero) = takes(0) returns(0) {
+    0x04 _CLEAN_ADDRESS() // [account]
+    sload                 // [account.data]
+    [NONCE_SHIFT] shr     // [account.nonce]
+    _RETURN_WORD(<zero>, msize)
 }
 
-#define macro _PERMIT_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro PERMIT(zero) = takes(0) returns(0) {
     0x04 calldataload               // [owner]
     0x24 calldataload               // [spender, owner]
     0x44 calldataload               // [allowance, spender, owner]
@@ -557,15 +535,15 @@
     // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
     // Prevent cross-chain replays.
-    IS_FORK() or                     // [is_fork || owner != recovered_signer]
+    _IS_FORK() or                    // [is_fork || owner != recovered_signer]
     invalid_signature_error jumpi    // []
     stop
 }
 
-#define macro _MULTICALL_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro MULTICALL(zero) = takes(0) returns(0) {
     0x04 calldataload                // [base_offset]
     0x20 sub                         // [base_offset != 0x20]
-    ASSERT_ZERO()                    // []
+    empty_revert jumpi
 
     0x24 calldataload                // [total_calls]
 
@@ -598,7 +576,7 @@
         swap2                        // [call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         dup6                         // [ret_data_pointer, call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         address gas delegatecall     // [success, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        BUBBLE_REVERT(<zero>)        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        _BUBBLE_REVERT(<zero>)       // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         // Store return offset for returndata.
         swap1                        // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
         0x40 dup4 sub                // [rel_ret_offset, res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
@@ -630,7 +608,7 @@
     <zero> return
 }
 
-#define macro _RESCUE_LOST_EXTERNAL(zero) = takes(0) returns(0) {
+#define macro _RESCUE_LOST(zero) = takes(0) returns(0) {
     // Load lost tokens.
     <zero>  LOAD_BALANCE()       // [0.bal]
     address LOAD_BALANCE()       // [this.balance, 0.bal]
@@ -651,31 +629,27 @@
     stop
 }
 
-#define macro RETURN_CODE() = takes(0) returns(0) {
-    pc 0x0f add dup1   // [const_size, const_size]
-    codesize sub       // [run_code_size, const_size]
-    dup1 swap2 0x00    // [0, const_size, run_code_size, run_code_size]
-    codecopy           // [run_code_size]
-    0x00 return
-}
-
-#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR(zero) = takes(0) returns(1) {
+#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR() = takes(0) returns(1) {
     [ERC712_DOMAIN_HASH] msize mstore
     [NAME_HASH]          msize mstore
     [VERSION_HASH]       msize mstore
     chainid              msize mstore
     address              msize mstore
-    msize <zero> sha3
+    msize 0x00 sha3
 }
 
+/// @dev Constructor not as optimized as it could be for the sake of favoring correctness over deployment cost
 #define macro CONSTRUCTOR() = takes(0) returns(0) {
-    IS_FORK() ASSERT_ZERO()
-    COMPUTE_ERC712_DOMAIN_SEPARATOR(returndatasize)
+    [TARGET_CHAIN_ID] chainid eq
+    expected_chain jumpi
+        0x0 0x0 revert
+    expected_chain:
+    COMPUTE_ERC712_DOMAIN_SEPARATOR()
     [CSTR_SIZE] dup1      // [cstr_size, cstr_size, domain_separator]
     codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
     sub                   // [runtime_size, cstr_size, domain_separator]
     dup1 swap2            // [cstr_size, runtime_size, runtime_size, domain_separator]
-    returndatasize        // [0, cstr_size, runtime_size, runtime_size, domain_separator]
+    0x0                   // [0, cstr_size, runtime_size, runtime_size, domain_separator]
     codecopy              // [runtime_size, domain_separator]
     swap1                 // [domain_separator, runtime_size]
     dup1 [DS_LOC1] mstore // [domain_separator, runtime_size]
@@ -1010,63 +984,72 @@
 
     // Final function destinations.
     name_final_dest:
-        _NAME_EXTERNAL(<zero>)
+        NAME(<zero>)
     symbol_final_dest:
-        _SYMBOL_EXTERNAL(<zero>)
+        SYMBOL(<zero>)
     decimals_final_dest:
-        _DECIMALS_EXTERNAL(<zero>)
+        DECIMALS(<zero>)
     totalSupply_final_dest:
-        _TOTAL_SUPPLY_EXTERNAL(<zero>)
+        TOTAL_SUPPLY(<zero>)
     transferFrom_final_dest:
-        _TRANSFER_FROM_EXTERNAL(<zero>)
+        TRANSFER_FROM(<zero>)
     transfer_final_dest:
-        _TRANSFER_EXTERNAL(<zero>)
+        TRANSFER(<zero>)
     balanceOf_final_dest:
-        _BALANCE_OF_EXTERNAL(<zero>)
+        BALANCE_OF(<zero>)
     approve_final_dest:
-        _APPROVE_EXTERNAL(<zero>)
+        APPROVE(<zero>)
     allowance_final_dest:
-        _ALLOWANCE_EXTERNAL(<zero>)
+        ALLOWANCE(<zero>)
     // For payable functions `RETURNDATASIZE` is used as 2 gas `PUSH0` instead of `CALLVALUE`
     deposit_final_dest:
-        _DEPOSIT_EXTERNAL(returndatasize)
+        DEPOSIT(returndatasize)
     depositTo_final_dest:
-        _DEPOSIT_TO_EXTERNAL(returndatasize)
+        DEPOSIT_TO(returndatasize)
     depositAndApprove_final_dest:
-        _DEPOSIT_AND_APPROVE_EXTERNAL(returndatasize)
+        DEPOSIT_AND_APPROVE(returndatasize)
     withdraw_final_dest:
-        _WITHDRAW_EXTERNAL(<zero>)
+        WITHDRAW(<zero>)
     withdrawTo_final_dest:
-        _WITHDRAW_TO_EXTERNAL(<zero>)
+        WITHDRAW_TO(<zero>)
     withdrawAll_final_dest:
-        _WITHDRAW_ALL_EXTERNAL(<zero>)
+        WITHDRAW_ALL(<zero>)
     withdrawAllTo_final_dest:
-        _WITHDRAW_ALL_TO_EXTERNAL(<zero>)
+        WITHDRAW_ALL_TO(<zero>)
     withdrawFrom_final_dest:
-        _WITHDRAW_FROM_EXTERNAL(<zero>)
+        WITHDRAW_FROM(<zero>)
     withdrawFromTo_final_dest:
-        _WITHDRAW_FROM_TO_EXTERNAL(<zero>)
+        WITHDRAW_FROM_TO(<zero>)
     DOMAIN_SEPARATOR_final_dest:
-        _DOMAIN_SEPARATOR_EXTERNAL(<zero>)
+        DOMAIN_SEPARATOR(<zero>)
     nonces_final_dest:
-        _NONCES_EXTERNAL(<zero>)
+        NONCES(<zero>)
     permit_final_dest:
-        _PERMIT_EXTERNAL(<zero>)
+        PERMIT(<zero>)
     multicall_final_dest:
         // Multicall does non-payable check so `callvalue` used as zero.
-        _MULTICALL_EXTERNAL(<zero>)
+        MULTICALL(<zero>)
     rescueLost_final_dest:
-        _RESCUE_LOST_EXTERNAL(<zero>)
+        RESCUE_LOST(<zero>)
 
     // Errors.
     insufficient_bal_error:
-        __FUNC_SIG(InsufficientBalance)     REVERT(<zero>)
+        __FUNC_SIG(InsufficientBalance)
+        REVERT(<zero>)
     insufficient_allowance_error:
-        __FUNC_SIG(InsufficientAllowance)   REVERT(<zero>)
+        __FUNC_SIG(InsufficientAllowance)
+        REVERT(<zero>)
     permit_expired_error:
-        __FUNC_SIG(PermitExpired)           REVERT(<zero>)
+        __FUNC_SIG(PermitExpired)
+        REVERT(<zero>)
     invalid_signature_error:
-        __FUNC_SIG(InvalidSignature)        REVERT(<zero>)
+        __FUNC_SIG(InvalidSignature)
+        REVERT(<zero>)
+    fork_error:
+        __FUNC_SIG(Fork)
+        REVERT(<zero>)
+    empty_revert:
+        <zero> <zero> revert
 }
 
 #define macro MAIN() = takes(0) returns(0) {

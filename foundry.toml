@@ -3,6 +3,7 @@ src = 'src'
 out = 'out'
 libs = ['lib']
 viaIR = false
+optimizer_runs = 0xffffffff
 
 [fuzz]
 runs = 256

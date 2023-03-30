@@ -2,33 +2,15 @@
 pragma solidity 0.8.15;
 
 import {Test} from "forge-std/Test.sol";
+import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
-import {IMETH} from "../src/interfaces/IMETH.sol";
-import {LibString} from "solady/utils/LibString.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract METH_WETHTest is Test {
-    uint256 internal constant MAINNET_CHAIN_ID = 0x1;
-
-    address internal recovery = makeAddr("RECOVERY_ADDR");
-
-    IMETH meth;
-
+contract METH_WETHTest is Test, METHBaseTest {
     event Approval(address indexed owner, address indexed spender, uint256 amount);
     event Transfer(address indexed from, address indexed to, uint256 amount);
     event Deposit(address indexed to, uint256 amount);
     event Withdrawal(address indexed from, uint256 amount);
-
-    function setUp() public {
-        vm.chainId(MAINNET_CHAIN_ID);
-
-        HuffDeployer huffDeployer = new HuffDeployer();
-
-        string[] memory consts = new string[](1);
-        consts[0] = string(abi.encodePacked("RECOVERY_ADDR=", LibString.toHexString(recovery)));
-
-        meth = IMETH(huffDeployer.deploy("./src/METH_WETH.huff", consts, 0));
-    }
 
     modifier realAddr(address _a) {
         vm.assume(_a != address(0));
@@ -36,7 +18,7 @@ contract METH_WETHTest is Test {
     }
 
     function testSymbol() public {
-        bytes memory symbolCall = abi.encodeCall(IMETH.symbol, ());
+        bytes memory symbolCall = abi.encodeCall(meth.symbol, ());
         (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
         assertTrue(success);
         assertEq(ret.length, 0x60);
@@ -48,7 +30,7 @@ contract METH_WETHTest is Test {
     }
 
     function testName() public {
-        bytes memory nameCall = abi.encodeCall(IMETH.name, ());
+        bytes memory nameCall = abi.encodeCall(meth.name, ());
         (bool success, bytes memory ret) = address(meth).staticcall(nameCall);
         assertTrue(success);
         assertEq(ret.length, 0x80);
@@ -60,7 +42,7 @@ contract METH_WETHTest is Test {
     }
 
     function testDecimals() public {
-        bytes memory decimalsCall = abi.encodeCall(IMETH.decimals, ());
+        bytes memory decimalsCall = abi.encodeCall(meth.decimals, ());
         (bool success, bytes memory ret) = address(meth).staticcall(decimalsCall);
         assertTrue(success);
         assertEq(ret.length, 0x20);
@@ -169,11 +151,11 @@ contract METH_WETHTest is Test {
         assertEq(meth.allowance(_from, _operator), _allowance);
         assertEq(meth.nonces(_to), _toNonce);
 
-        if (_from != _to) {
+        if (_from == _to) {
+            assertEq(meth.balanceOf(_from), _startAmount);
+        } else {
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
             assertEq(meth.balanceOf(_to), _transferAmount);
-        } else {
-            assertEq(meth.balanceOf(_from), _startAmount);
             assertEq(meth.nonces(_from), _fromNonce);
         }
     }
@@ -221,9 +203,9 @@ contract METH_WETHTest is Test {
 
     function testMulticall() public {
         bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeCall(IMETH.decimals, ());
-        calls[1] = abi.encodeCall(IMETH.symbol, ());
-        calls[2] = abi.encodeCall(IMETH.name, ());
+        calls[0] = abi.encodeCall(meth.decimals, ());
+        calls[1] = abi.encodeCall(meth.symbol, ());
+        calls[2] = abi.encodeCall(meth.name, ());
         bytes[] memory retData = meth.multicall(calls);
         assertEq(retData.length, 3);
         assertEq(retData[0].length, 0x20);
