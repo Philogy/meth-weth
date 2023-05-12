@@ -1,5 +1,5 @@
 import sys
-from sha3 import keccak_256
+from Crypto.Hash import keccak as _keccak
 import re
 import subprocess
 
@@ -9,7 +9,7 @@ IMMUTABLES = [
 
 
 def keccak(inp: str) -> bytes:
-    return keccak_256(inp.encode()).digest()
+    return _keccak.new(data=inp.encode(), digest_bits=256).digest()
 
 
 OP_RETURN = 0xf3

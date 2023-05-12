@@ -13,9 +13,9 @@
 //               CONSTRUCTOR PARAMETERS                       //
 ////////////////////////////////////////////////////////////////
 /// TODO: Set
-#define constant DS_LOC1 = 0x1733
+#define constant DS_LOC1 = 0x168d
 /// TODO: Set
-#define constant DS_LOC2 = 0x1810
+#define constant DS_LOC2 = 0x176a
 
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
@@ -69,11 +69,11 @@
 #define constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
 
 
-#define macro _REQUIRE_NOT_ZERO(zero) = takes(1) returns(1) {
+#define macro _REQUIRE_NOT_ZERO() = takes(1) returns(1) {
     // takes:         [to]
     dup1           // [to, to]
     not_zero jumpi // [to]
-        __FUNC_SIG(RecipientZero) _REVERT(<zero>)
+        __FUNC_SIG(RecipientZero) _REVERT()
     not_zero:      // [to]
     // returns:       [to]
 }
@@ -85,53 +85,53 @@
     // returns:        // [addr]
 }
 
-#define macro _REVERT(zero) = takes(1) returns(0) {
-    <zero> mstore
+#define macro _REVERT() = takes(1) returns(0) {
+    push0 mstore
     0x04 0x1c revert
 }
 
-#define macro _RETURN_WORD(zero, word_size) = takes(1) returns(0) {
+#define macro _RETURN_WORD(word_size) = takes(1) returns(0) {
     // takes:                    [x]
-                <zero> mstore // []
-    <word_size> <zero> return // []
+                push0 mstore // []
+    <word_size> push0 return // []
 }
 
-#define macro RETURN_TRUE(zero, word_size) = takes(0) returns(0) {
-    0x1 _RETURN_WORD(<zero>, <word_size>)
+#define macro _RETURN_TRUE(word_size) = takes(0) returns(0) {
+    0x1 _RETURN_WORD(<word_size>)
 }
 
-#define macro _BUBBLE_REVERT(zero) = takes(1) returns(0) {
+#define macro _BUBBLE_REVERT() = takes(1) returns(0) {
     // takes:             [success]
     no_bubble jumpi
-        returndatasize <zero> <zero> returndatacopy
-        returndatasize <zero> revert
+        returndatasize push0 push0 returndatacopy
+        returndatasize push0 revert
     no_bubble:
 }
 
-#define macro PUSH_4_ZEROS(zero) = takes(0) returns(4) {
-    <zero> <zero> <zero> <zero>     // [0, 0, 0, 0]
+#define macro _PUSH_4_ZEROS() = takes(0) returns(4) {
+    push0 push0 push0 push0     // [0, 0, 0, 0]
 }
 
-#define macro SEND_ETH(zero) = takes(6) returns(0) {
+#define macro _SEND_ETH() = takes(6) returns(0) {
     // takes:                [recipient, amount, 0, 0, 0, 0]
     gas call              // [success]
-    _BUBBLE_REVERT(<zero>) // []
+    _BUBBLE_REVERT() // []
     // returns:              []
 }
 
 // -- Internal Macros
-#define macro LOAD_BALANCE() = takes(1) returns(1) {
+#define macro _LOAD_BALANCE() = takes(1) returns(1) {
     sload [BALANCE_MASK] and
 }
 
-#define macro EMIT_TRANSFER(zero, word_size) = takes(3) returns(0) {
+#define macro _EMIT_TRANSFER(word_size) = takes(3) returns(0) {
     // takes:                 [amount, from, to]
-    <zero> mstore          // [from, to]
+    push0 mstore          // [from, to]
     __EVENT_HASH(Transfer) // [Transfer.sig, from, to]
-    <word_size> <zero> log3
+    <word_size> push0 log3
 }
 
-#define macro _TRANSFER(zero, word_size) = takes(5) returns(0) {
+#define macro _TRANSFER(word_size) = takes(5) returns(0) {
     // takes:                  [from, amount, amount, from, to]
 
     // -- Update `from` Balance
@@ -148,10 +148,10 @@
     dup2 add                // [to.data', amount, from, to]
     dup4 sstore             // [amount, from, to]
 
-    EMIT_TRANSFER(<zero>, <word_size>)
+    _EMIT_TRANSFER(<word_size>)
 }
 
-#define macro WITHDRAW_ALL(zero) = takes(0) returns(1) {
+#define macro _WITHDRAW_ALL() = takes(0) returns(1) {
     // takes:                          []
     // -- Update balance.
     caller sload                    // [msg.sender.data]
@@ -160,53 +160,53 @@
     // -- Get amount and emit event.
     [BALANCE_MASK] and              // [amount]
     caller dup2                     // [amount, caller, amount]
-    EMIT_WITHDRAWAL(<zero>, msize)  // [amount]
+    _EMIT_WITHDRAWAL(msize)  // [amount]
     // returns:                        [amount]
 }
 
 // -- External Functions
 // ---- Metadata / Global Methods
-#define macro NAME(zero) = takes(0) returns(0) {
+#define macro NAME() = takes(0) returns(0) {
     // Store string offset.
-    0x20            <zero>                mstore
+    0x20            push0                mstore
     // Write packed string data to memory, including length.
     [PACKED_NAME_1] [PACKED_NAME_OFFSET_1] mstore
     [PACKED_NAME_2] [PACKED_NAME_OFFSET_2] mstore
-    msize           <zero>                 return
+    msize           push0                 return
 }
 
-#define macro SYMBOL(zero) = takes(0) returns(0) {
-    0x20              <zero>                   mstore
+#define macro SYMBOL() = takes(0) returns(0) {
+    0x20              push0                   mstore
     [PACKED_SYMBOL_1] [PACKED_SYMBOL_OFFSET_1] mstore
-    msize             <zero>                   return
+    msize             push0                   return
 }
 
-#define macro DECIMALS(zero) = takes(0) returns(0) {
-    [DECIMALS] _RETURN_WORD(<zero>, msize)
+#define macro DECIMALS() = takes(0) returns(0) {
+    [DECIMALS] _RETURN_WORD(msize)
 }
 
-#define macro TOTAL_SUPPLY(zero) = takes(0) returns(0) {
-    selfbalance _RETURN_WORD(<zero>, msize)
+#define macro TOTAL_SUPPLY() = takes(0) returns(0) {
+    selfbalance _RETURN_WORD(msize)
 }
 
 // ---- Transfer related methods
-#define macro BALANCE_OF(zero) = takes(0) returns(0) {
+#define macro BALANCE_OF() = takes(0) returns(0) {
     0x04 _CLEAN_ADDRESS() // [account]
-    LOAD_BALANCE()        // [account.bal]
-    _RETURN_WORD(<zero>, msize)
+    _LOAD_BALANCE()        // [account.bal]
+    _RETURN_WORD(msize)
 }
 
-#define macro TRANSFER(zero) = takes(0) returns(0) {
+#define macro TRANSFER() = takes(0) returns(0) {
     0x04 _CLEAN_ADDRESS() // [to]
     caller                // [msg.sender, to]
     0x24 calldataload     // [amount, msg.sender, to]
     dup1 caller           // [msg.sender, amount, amount, msg.sender, to]
-    _TRANSFER(<zero>, msize)
+    _TRANSFER(msize)
 
-    RETURN_TRUE(<zero>, msize)
+    _RETURN_TRUE(msize)
 }
 
-#define macro APPROVE(zero) = takes(0) returns(0) {
+#define macro _APPROVE() = takes(0) returns(0) {
     // -- Load & Verify Params
     0x04 _CLEAN_ADDRESS()   // [spender]
     0x24 calldataload      // [amount, spender]
@@ -215,40 +215,39 @@
     caller msize  mstore   // [amount, spender]
     dup2   msize  mstore   // [amount, spender]
     dup1                   // [amount, amount, spender]
-    0x40 <zero> sha3       // [allowance.slot, amount, amount, spender]
+    0x40 push0 sha3       // [allowance.slot, amount, amount, spender]
     sstore                 // [amount, spender]
 
     // -- Emit Event
-    <zero> mstore          // [spender]
+    push0 mstore          // [spender]
     caller                 // [owner, spender]
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
-    0x20 <zero> log3       // []
+    0x20 push0 log3       // []
 }
 
-#define macro _APPROVE(zero) = takes(0) returns(0) {
-    APPROVE(<zero>)
-
-    RETURN_TRUE(<zero>, 0x20)
+#define macro APPROVE() = takes(0) returns(0) {
+    _APPROVE()
+    _RETURN_TRUE(0x20)
 }
 
-#define macro ALLOWANCE(zero) = takes(0) returns(0) {
+#define macro ALLOWANCE() = takes(0) returns(0) {
     0x24 calldataload  // [spender]
     0x04 calldataload  // [owner, spender]
     msize mstore       // [spender]
     msize mstore       // []
-    msize <zero> sha3  // [allowance.slot]
+    msize push0 sha3  // [allowance.slot]
     sload              // [allowance]
-    _RETURN_WORD(<zero>, 0x20)
+    _RETURN_WORD(0x20)
 }
 
 
 // Actually "returns" 4 if jumping to `use_allowance_2pop`
 /// @dev Checks and updates `from`'s allowance to caller
-#define macro USE_ALLOWANCE(zero, use_allowance_2pop) = takes(2) returns(2) {
+#define macro _USE_ALLOWANCE(use_allowance_2pop) = takes(2) returns(2) {
     // takes:               [amount, from]
     dup2   msize  mstore // [amount, from]
     caller msize  mstore // [amount, from]
-    msize  <zero> sha3   // [allowance.slot, amount, from]
+    msize  push0 sha3   // [allowance.slot, amount, from]
     dup1 sload           // [allowance, allowance.slot, amount, from]
     dup1 [INF_ALLOW_LIM] // [inf_allow_lim, allowance, allowance.slot, amount, from]
     lt <use_allowance_2pop> jumpi
@@ -260,74 +259,74 @@
     swap1 sstore         // [amount, from]
 }
 
-#define macro TRANSFER_FROM_END(zero, word_size) = takes(3) returns(0) {
+#define macro _TRANSFER_FROM_END(word_size) = takes(3) returns(0) {
     // takes:             [amount, from, to]
     dup1 dup3          // [from, amount, amount, from, to]
-    _TRANSFER(<zero>, <word_size>)
-    RETURN_TRUE(<zero>, <word_size>)
+    _TRANSFER(<word_size>)
+    _RETURN_TRUE(<word_size>)
 }
 
-#define macro TRANSFER_FROM(zero) = takes(0) returns(0) {
+#define macro TRANSFER_FROM() = takes(0) returns(0) {
     // -- Load & Verify Params.
     0x24 _CLEAN_ADDRESS() // [to]
     0x04 calldataload    // [from, to]
     0x44 calldataload    // [amount, from, to]
 
     // -- Verify Allowance
-    USE_ALLOWANCE(<zero>, transfer_from_allowed_2pop)
+    _USE_ALLOWANCE(transfer_from_allowed_2pop)
         //                  [amount, from, to]
-        TRANSFER_FROM_END(<zero>, 0x20)
+        _TRANSFER_FROM_END(0x20)
     transfer_from_allowed_2pop:
         //                [_, _, amount, from, to]
         pop pop        // [amount, from, to]
-        TRANSFER_FROM_END(<zero>, 0x20)
+        _TRANSFER_FROM_END(0x20)
 }
 
-#define macro EMIT_DEPOSIT(zero, word_size) = takes(1) returns(0) {
+#define macro _EMIT_DEPOSIT(word_size) = takes(1) returns(0) {
     // takes:                  [to]
-    callvalue <zero> mstore // [to]
+    callvalue push0 mstore // [to]
     __EVENT_HASH(Deposit)   // [Deposit.sig, to]
-    <word_size> <zero> log2 // []
+    <word_size> push0 log2 // []
 }
 
-#define macro DEPOSIT(zero) = takes(0) returns(0) {
+#define macro _DEPOSIT() = takes(0) returns(0) {
     caller sload            // [msg.sender.data]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [msg.sender.data']
     caller sstore           // []
-    caller EMIT_DEPOSIT(<zero>, msize)
+    caller _EMIT_DEPOSIT(msize)
 }
 
-#define macro DEPOSIT(zero) = takes(0) returns(0) {
-    DEPOSIT(<zero>)
+#define macro DEPOSIT() = takes(0) returns(0) {
+    _DEPOSIT()
     stop
 }
 
-#define macro DEPOSIT_TO(zero) = takes(0) returns(0) {
+#define macro DEPOSIT_TO() = takes(0) returns(0) {
     // -- Load params.
     0x04 _CLEAN_ADDRESS()    // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
     dup2 sstore             // [to]
-    EMIT_DEPOSIT(<zero>, msize)
+    _EMIT_DEPOSIT(msize)
     stop
 }
 
-#define macro DEPOSIT_AND_APPROVE(zero) = takes(0) returns(0) {
-    DEPOSIT(<zero>)
-    APPROVE(<zero>)
+#define macro DEPOSIT_AND_APPROVE() = takes(0) returns(0) {
+    _DEPOSIT()
+    _APPROVE()
     stop
 }
 
-#define macro EMIT_WITHDRAWAL(zero, word_size) = takes(2) returns(0) {
+#define macro _EMIT_WITHDRAWAL(word_size) = takes(2) returns(0) {
     // takes:                   [amount, from]
-    <zero> mstore            // [from]
+    push0 mstore            // [from]
     __EVENT_HASH(Withdrawal) // [Withdrawal.sig, from]
-    <word_size> <zero> log2  // []
+    <word_size> push0 log2  // []
 }
 
-#define macro BURN_FROM_CALLER(zero) = takes(2) returns(0) {
+#define macro _BURN_FROM_CALLER() = takes(2) returns(0) {
     // takes:                [amount, msg.sender]
 
     // -- Update Balance
@@ -341,56 +340,56 @@
     sub                   // [msg.sender.data', amount, msg.sender]
     caller sstore         // [amount, msg.sender]
 
-    EMIT_WITHDRAWAL(<zero>, msize)
+    _EMIT_WITHDRAWAL(msize)
 }
 
-#define macro WITHDRAW(zero) = takes(0) returns(0) {
-    PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
+#define macro WITHDRAW() = takes(0) returns(0) {
+    _PUSH_4_ZEROS()     // [0, 0, 0, 0]
     0x04 calldataload        // [amount, 0, 0, 0, 0]
     caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
-    BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
+    _BURN_FROM_CALLER() // [amount, 0, 0, 0, 0]
     caller                   // [msg.sender, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)         // []
+    _SEND_ETH()         // []
     stop
 }
 
-#define macro WITHDRAW_TO(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_TO() = takes(0) returns(0) {
     // -- Setup stack.
-    PUSH_4_ZEROS(<zero>)     // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()     // [0, 0, 0, 0]
     0x24 calldataload        // [amount, 0, 0, 0, 0]
     caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
     // -- Update balance and emit event.
-    BURN_FROM_CALLER(<zero>) // [amount, 0, 0, 0, 0]
+    _BURN_FROM_CALLER() // [amount, 0, 0, 0, 0]
     // -- Transfer ETH
     0x04 calldataload        // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)         // []
+    _SEND_ETH()         // []
     stop
 }
 
-#define macro WITHDRAW_ALL(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_ALL() = takes(0) returns(0) {
     // -- Setup stack.
-    PUSH_4_ZEROS(<zero>) // [0, 0, 0, 0]
+    _PUSH_4_ZEROS() // [0, 0, 0, 0]
     // -- Update balance and emit event.
-    WITHDRAW_ALL(<zero>) // [amount, 0, 0, 0, 0]
+    _WITHDRAW_ALL() // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     caller               // [msg.sender, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)     // []
+    _SEND_ETH()     // []
     stop
 }
 
-#define macro WITHDRAW_ALL_TO(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_ALL_TO() = takes(0) returns(0) {
     // Push zeros before to avoid swaps later.
-    PUSH_4_ZEROS(<zero>)      // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()      // [0, 0, 0, 0]
     // -- Update balance and emit event.
-    WITHDRAW_ALL(<zero>)      // [amount, 0, 0, 0, 0]
+    _WITHDRAW_ALL()      // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
     0x04 calldataload         // [to, amount, 0, 0, 0, 0]
-    _REQUIRE_NOT_ZERO(<zero>) // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)          // []
+    _REQUIRE_NOT_ZERO() // [to, amount, 0, 0, 0, 0]
+    _SEND_ETH()          // []
     stop
 }
 
-#define macro BURN_FROM(zero) = takes(2) returns(0) {
+#define macro _BURN_FROM() = takes(2) returns(0) {
     // takes:                   [amount, from]
 
     // -- Update Balance
@@ -405,63 +404,63 @@
     dup3 sstore              // [amount, from]
 
     // -- Emit Withdrawal
-    <zero> mstore            // [from]
+    push0 mstore            // [from]
     __EVENT_HASH(Withdrawal) // [Transfer.sig, from]
-    0x20 <zero> log2         // []
+    0x20 push0 log2         // []
 
     // returns:                 []
 }
 
-#define macro WITHDRAW_FROM(zero) = takes(7) returns(0) {
+#define macro _WITHDRAW_FROM() = takes(7) returns(0) {
     // takes:             [amount, from, amount, 0, 0, 0, 0]
 
-    BURN_FROM(<zero>)  // [amount, 0, 0, 0, 0]
+    _BURN_FROM()  // [amount, 0, 0, 0, 0]
     caller             // [msg.sender, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)   // []
+    _SEND_ETH()   // []
 }
 
-#define macro WITHDRAW_FROM(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_FROM() = takes(0) returns(0) {
     // -- Load & Verify Params.
-    PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()    // [0, 0, 0, 0]
     0x24 calldataload       // [amount, 0, 0, 0, 0]
     0x04 calldataload       // [from, amount, 0, 0, 0, 0]
     dup2                    // [amount, from, amount, 0, 0, 0, 0]
 
-    USE_ALLOWANCE(<zero>, withdraw_from_allowed_2pop)
+    _USE_ALLOWANCE(withdraw_from_allowed_2pop)
         //                     [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM(<zero>)
+        _WITHDRAW_FROM()
         stop
     withdraw_from_allowed_2pop:
         //                     [_, _, amount, from, amount, 0, 0, 0, 0]
         pop pop             // [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM(<zero>)
+        _WITHDRAW_FROM()
         stop
 }
 
-#define macro WITHDRAW_FROM_TO(zero) = takes(7) returns(0) {
+#define macro WITHDRAW_FROM_TO() = takes(7) returns(0) {
     // takes:                    [amount, from, amount, 0, 0, 0, 0]
 
-    BURN_FROM(<zero>)         // [amount, 0, 0, 0, 0]
+    _BURN_FROM()         // [amount, 0, 0, 0, 0]
     0x24 calldataload         // [to, amount, 0, 0, 0, 0]
-    SEND_ETH(<zero>)          // []
+    _SEND_ETH()          // []
 }
 
-#define macro WITHDRAW_FROM_TO(zero) = takes(0) returns(0) {
+#define macro WITHDRAW_FROM_TO() = takes(0) returns(0) {
     // Load & Verify Params.
 
-    PUSH_4_ZEROS(<zero>)    // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()    // [0, 0, 0, 0]
     0x04 calldataload       // [from, 0, 0, 0, 0]
     0x44 calldataload       // [amount, from, 0, 0, 0, 0]
     dup2                    // [amount, from, amount, 0, 0, 0, 0]
 
-    USE_ALLOWANCE(<zero>, withdraw_from_to_allowed_2pop)
+    _USE_ALLOWANCE(withdraw_from_to_allowed_2pop)
         //                     [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM_TO(<zero>)
+        _WITHDRAW_FROM_TO()
         stop
     withdraw_from_to_allowed_2pop:
         //                     [_, _, amount, from, amount, 0, 0, 0, 0]
         pop pop             // [amount, from, amount, 0, 0, 0, 0]
-        WITHDRAW_FROM_TO(<zero>)
+        _WITHDRAW_FROM_TO()
         stop
 }
 
@@ -469,19 +468,19 @@
     [TARGET_CHAIN_ID] chainid sub
 }
 
-#define macro DOMAIN_SEPARATOR(zero) = takes(0) returns(0) {
+#define macro DOMAIN_SEPARATOR() = takes(0) returns(0) {
     _IS_FORK() fork_error jumpi
-    [DOMAIN_SEPARATOR_PLACEHOLDER] _RETURN_WORD(<zero>, msize)
+    [DOMAIN_SEPARATOR_PLACEHOLDER] _RETURN_WORD(msize)
 }
 
-#define macro NONCES(zero) = takes(0) returns(0) {
+#define macro NONCES() = takes(0) returns(0) {
     0x04 _CLEAN_ADDRESS() // [account]
     sload                 // [account.data]
     [NONCE_SHIFT] shr     // [account.nonce]
-    _RETURN_WORD(<zero>, msize)
+    _RETURN_WORD(msize)
 }
 
-#define macro PERMIT(zero) = takes(0) returns(0) {
+#define macro PERMIT() = takes(0) returns(0) {
     0x04 calldataload               // [owner]
     0x24 calldataload               // [spender, owner]
     0x44 calldataload               // [allowance, spender, owner]
@@ -511,24 +510,24 @@
     0x20 0x60 log3                   // [owner]
 
     // -- Calculate Message Hash
-    msize <zero> sha3                // [permit_struct_hash, owner]
+    msize push0 sha3                // [permit_struct_hash, owner]
     // Constructor ensures code is padded such that length is exatly 0x1901.
-    [ERC712_ENCODE_HEAD]         <zero> mstore
+    [ERC712_ENCODE_HEAD]         push0 mstore
     [DOMAIN_SEPARATOR_PLACEHOLDER] 0x20 mstore
     //                                  [permit_struct_hash, owner]
     0x40 mstore                      // [owner]
     0x42 0x1e sha3                   // [encoded_struct, owner]
 
     // -- Verify Signature
-    <zero> mstore                    // [owner]
+    push0 mstore                    // [owner]
     // Copy v, r, s at once into memory.
     0x60 0x84 0x20 calldatacopy      // [owner]
-    0x20 <zero> 0x80 <zero>          // [0, 0x80, 0, 0x20, owner]
+    0x20 push0 0x80 push0          // [0, 0x80, 0, 0x20, owner]
     chainid                          // [ecrecover_precompile_addr, 0, 0x80, 0, 0x20, owner]
     gas staticcall                   // [success, owner]
     pop                              // [owner]
      // If ecrecover failed no data will be returned and mem[0:0x20] will be the message hash.
-    <zero> mload                     // [recovered_signer, owner]
+    push0 mload                     // [recovered_signer, owner]
     // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
     // Prevent cross-chain replays.
@@ -537,7 +536,7 @@
     stop
 }
 
-#define macro MULTICALL(zero) = takes(0) returns(0) {
+#define macro MULTICALL() = takes(0) returns(0) {
     0x04 calldataload                // [base_offset]
     0x20 sub                         // [base_offset != 0x20]
     empty_revert jumpi
@@ -545,12 +544,12 @@
     0x24 calldataload                // [total_calls]
 
     // Prepare header return data
-    0x20 <zero> mstore               // [total_calls]
+    0x20 push0 mstore               // [total_calls]
     dup1  msize mstore               // [total_calls]
 
     dup1 multicall_loop_start jumpi
         // Return empty array if length == 0.
-        msize <zero> return
+        msize push0 return
     multicall_loop_start:
         //                              [total_calls]
         dup1 0x5 shl 0x40 add        // [ret_data_pointer, total_calls]
@@ -569,11 +568,11 @@
         dup6                         // [ret_data_pointer, call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         calldatacopy                 // [call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         // Do self-delegatecall.
-        <zero> <zero>                // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        push0 push0                // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         swap2                        // [call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         dup6                         // [ret_data_pointer, call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         address gas delegatecall     // [success, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        _BUBBLE_REVERT(<zero>)       // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        _BUBBLE_REVERT()       // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         // Store return offset for returndata.
         swap1                        // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
         0x40 dup4 sub                // [rel_ret_offset, res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
@@ -587,7 +586,7 @@
         // Move returndata pointer for returndata. 
         0x20 add                     // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         // Copy returndata into memory.
-        returndatasize <zero>        // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        returndatasize push0        // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         dup3                         // [ret_data_pointer, 0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         returndatacopy               // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         // The returndata of all successful functions is a multiple of 0x20 so no zero padding and word alignment necessary.
@@ -602,31 +601,31 @@
         dup4 multicall_loop_continue jumpi
     //                                  [call_pointer, res_offset_pointer, ret_data_pointer, 0]
     swap2                            // [res_offset_pointer, ret_data_pointer, call_pointer, 0]
-    <zero> return
+    push0 return
 }
 
-#define macro RESCUE_LOST(zero) = takes(0) returns(0) {
+#define macro RESCUE_LOST() = takes(0) returns(0) {
     // Load lost tokens.
-    <zero>  LOAD_BALANCE()       // [0.bal]
-    address LOAD_BALANCE()       // [this.balance, 0.bal]
+    push0 _LOAD_BALANCE()         // [0.bal]
+    address _LOAD_BALANCE()       // [this.balance, 0.bal]
     // Emit Transfer events.
-    [RECOVERY_ADDR] <zero> dup4  // [0.bal, 0, recovery_addr, this.balance, 0.bal]
-    EMIT_TRANSFER(<zero>, msize) // [this.balance, 0.bal]
+    [RECOVERY_ADDR] push0 dup4   // [0.bal, 0, recovery_addr, this.balance, 0.bal]
+    _EMIT_TRANSFER(msize)         // [this.balance, 0.bal]
     [RECOVERY_ADDR] address dup3 // [this.balance, this, recovery_addr, this.balance, 0.bal]
-    EMIT_TRANSFER(<zero>, msize) // [this.balance, 0.bal]
+    _EMIT_TRANSFER(msize)         // [this.balance, 0.bal]
     // Increase the balance of the rescue address.
     add                          // [total_lost]
     [RECOVERY_ADDR] sload        // [recovery_addr.data, total_lost]
     add                          // [recovery_addr.data']
     [RECOVERY_ADDR] sstore       // []
     // Reset balance of "lost accounts" to 0.
-    <zero> <zero>  sstore        // []
-    <zero> address sstore        // []
+    push0 push0  sstore          // []
+    push0 address sstore         // []
     // Send ETH to rescue address
     stop
 }
 
-#define macro COMPUTE_ERC712_DOMAIN_SEPARATOR() = takes(0) returns(1) {
+#define macro _COMPUTE_ERC712_DOMAIN_SEPARATOR() = takes(0) returns(1) {
     [ERC712_DOMAIN_HASH] msize mstore
     [NAME_HASH]          msize mstore
     [VERSION_HASH]       msize mstore
@@ -639,9 +638,9 @@
 #define macro CONSTRUCTOR() = takes(0) returns(0) {
     [TARGET_CHAIN_ID] chainid eq
     expected_chain jumpi
-        0x0 0x0 revert
+        push0 push0 revert
     expected_chain:
-    COMPUTE_ERC712_DOMAIN_SEPARATOR()
+    _COMPUTE_ERC712_DOMAIN_SEPARATOR()
     __codesize(CONSTRUCTOR) dup1
     //                       [cstr_size, cstr_size, domain_separator]
     codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
@@ -655,65 +654,65 @@
     returndatasize return
 }
 
-#define macro SELECTOR(zero) = takes(0) returns(1) {
-    <zero> calldataload 0xe0 shr
+#define macro __SELECTOR() = takes(0) returns(1) {
+    push0 calldataload 0xe0 shr
 }
 
-#define macro PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+#define macro __PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
     <selector> eq <final_dest> jumpi
-    returndatasize returndatasize revert
+    push0 push0 revert
     // Padding to make sure block is 16 bytes large post compilation.
     stop stop
     /*
     JUMPDEST          PUSH4             SELECTOR_BYTE_1   SELECTOR_BYTE_2
     SELECTOR_BYTE_3   SELECTOR_BYTE_4   EQ                PUSH2
-    DEST_BYTE_1       DEST_BYTE_2       JUMPI             RETURNDATASIZE
-    RETURNDATASIZE    REVERT            STOP              STOP
+    DEST_BYTE_1       DEST_BYTE_2       JUMPI             PUSH0
+    PUSH0             REVERT            STOP              STOP
     */
 }
 
-#define macro NON_PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
+#define macro __NON_PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
     <selector> eq callvalue lt <final_dest> jumpi
-    returndatasize returndatasize revert
+    push0 push0 revert
     /*
     No padding as non-payable check block is exactly 16-bytes large post-compile:
     JUMPDEST          PUSH4             SELECTOR_BYTE_1   SELECTOR_BYTE_2
     SELECTOR_BYTE_3   SELECTOR_BYTE_4   EQ                CALLVALUE
     LT                PUSH2             DEST_BYTE_1       DEST_BYTE_2
-    JUMPI             RETURNDATASIZE    RETURNDATASIZE    REVERT
+    JUMPI             PUSH0             PUSH0             REVERT
     */
 }
 
-#define macro NO_MATCH() = takes(0) returns(0) {
-    returndatasize returndatasize revert
+#define macro __NO_MATCH() = takes(0) returns(0) {
+    push0 push0 revert
     // Padding to make sure block is 16 bytes large post compilation.
     stop stop stop stop
     stop stop stop stop
     stop stop stop stop
     /*
-    JUMPDEST          RETURNDATASIZE    RETURNDATASIZE    REVERT
+    JUMPDEST          PUSH0             PUSH0             REVERT
     STOP              STOP              STOP              STOP
     STOP              STOP              STOP              STOP
     STOP              STOP              STOP              STOP
     */
 }
 
-#define macro RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
+#define macro __RECEIVE_CHECK(deposit_dest) = takes(0) returns(0) {
     calldatasize iszero <deposit_dest> jumpi
-    returndatasize returndatasize revert
+    push0 push0 revert
     // Padding to make sure block is 16 bytes large post compilation.
     stop stop stop stop stop stop
     /*
     JUMPDEST          CALLDATASIZE      ISZERO            PUSH2
-    DEST_BYTE_1       DEST_BYTE_2       JUMPI             RETURNDATASIZE
-    RETURNDATASIZE    REVERT            STOP              STOP
+    DEST_BYTE_1       DEST_BYTE_2       JUMPI             PUSH0
+    PUSH0             REVERT            STOP              STOP
     STOP              STOP              STOP              STOP
     */
 }
 
-#define macro _MAIN(zero) = takes(0) returns(0) {
+#define macro MAIN() = takes(0) returns(0) {
     // Load selector.
-    SELECTOR(pc)
+    __SELECTOR()
     // Isolate unique selector bits.
     dup1 [S_SHIFT] shr
     // Set lower bits to 1 to ensure alternative selectors also jump to valid destinations.
@@ -723,334 +722,329 @@
     // Padding to make sure jump dests start at the right offset.
     stop stop
 
-    dest_0x00f: RECEIVE_CHECK(deposit_final_dest)
-    dest_0x01f: NO_MATCH()
-    dest_0x02f: NO_MATCH()
-    dest_0x03f: NO_MATCH()
-    dest_0x04f: NO_MATCH()
-    dest_0x05f: NO_MATCH()
-    dest_0x06f: NON_PAYABLE_FUNC_CHECK(0x06fdde03, name_final_dest)
-    dest_0x07f: NO_MATCH()
-    dest_0x08f: NO_MATCH()
-    dest_0x09f: NON_PAYABLE_FUNC_CHECK(0x095ea7b3, approve_final_dest)
-    dest_0x0af: NO_MATCH()
-    dest_0x0bf: NO_MATCH()
-    dest_0x0cf: NO_MATCH()
-    dest_0x0df: NO_MATCH()
-    dest_0x0ef: NO_MATCH()
-    dest_0x0ff: NO_MATCH()
-    dest_0x10f: NO_MATCH()
-    dest_0x11f: NO_MATCH()
-    dest_0x12f: NO_MATCH()
-    dest_0x13f: NO_MATCH()
-    dest_0x14f: NO_MATCH()
-    dest_0x15f: NO_MATCH()
-    dest_0x16f: NO_MATCH()
-    dest_0x17f: NO_MATCH()
-    dest_0x18f: NON_PAYABLE_FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
-    dest_0x19f: NO_MATCH()
-    dest_0x1af: NO_MATCH()
-    dest_0x1bf: NO_MATCH()
-    dest_0x1cf: NO_MATCH()
-    dest_0x1df: NO_MATCH()
-    dest_0x1ef: NO_MATCH()
-    dest_0x1ff: NO_MATCH()
-    dest_0x20f: NON_PAYABLE_FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
-    dest_0x21f: NO_MATCH()
-    dest_0x22f: NO_MATCH()
-    dest_0x23f: NON_PAYABLE_FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
-    dest_0x24f: NO_MATCH()
-    dest_0x25f: NO_MATCH()
-    dest_0x26f: NO_MATCH()
-    dest_0x27f: NO_MATCH()
-    dest_0x28f: PAYABLE_FUNC_CHECK(0x28026ace, depositAndApprove_final_dest)
-    dest_0x29f: NO_MATCH()
-    dest_0x2af: NO_MATCH()
-    dest_0x2bf: NO_MATCH()
-    dest_0x2cf: NO_MATCH()
-    dest_0x2df: NO_MATCH()
-    dest_0x2ef: NON_PAYABLE_FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
-    dest_0x2ff: NO_MATCH()
-    dest_0x30f: NO_MATCH()
-    dest_0x31f: NON_PAYABLE_FUNC_CHECK(0x313ce567, decimals_final_dest)
-    dest_0x32f: NO_MATCH()
-    dest_0x33f: NO_MATCH()
-    dest_0x34f: NO_MATCH()
-    dest_0x35f: NO_MATCH()
-    dest_0x36f: NON_PAYABLE_FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
-    dest_0x37f: NO_MATCH()
-    dest_0x38f: NO_MATCH()
-    dest_0x39f: NO_MATCH()
-    dest_0x3af: NO_MATCH()
-    dest_0x3bf: NO_MATCH()
-    dest_0x3cf: NO_MATCH()
-    dest_0x3df: NO_MATCH()
-    dest_0x3ef: NO_MATCH()
-    dest_0x3ff: NO_MATCH()
-    dest_0x40f: NO_MATCH()
-    dest_0x41f: NO_MATCH()
-    dest_0x42f: NO_MATCH()
-    dest_0x43f: NO_MATCH()
-    dest_0x44f: NO_MATCH()
-    dest_0x45f: NO_MATCH()
-    dest_0x46f: NON_PAYABLE_FUNC_CHECK(0x4648b24c, rescueLost_final_dest)
-    dest_0x47f: NO_MATCH()
-    dest_0x48f: NO_MATCH()
-    dest_0x49f: NO_MATCH()
-    dest_0x4af: NON_PAYABLE_FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
-    dest_0x4bf: NO_MATCH()
-    dest_0x4cf: NO_MATCH()
-    dest_0x4df: NO_MATCH()
-    dest_0x4ef: NO_MATCH()
-    dest_0x4ff: NO_MATCH()
-    dest_0x50f: NO_MATCH()
-    dest_0x51f: NO_MATCH()
-    dest_0x52f: NO_MATCH()
-    dest_0x53f: NO_MATCH()
-    dest_0x54f: NO_MATCH()
-    dest_0x55f: NO_MATCH()
-    dest_0x56f: NO_MATCH()
-    dest_0x57f: NO_MATCH()
-    dest_0x58f: NO_MATCH()
-    dest_0x59f: NO_MATCH()
-    dest_0x5af: NO_MATCH()
-    dest_0x5bf: NO_MATCH()
-    dest_0x5cf: NO_MATCH()
-    dest_0x5df: NO_MATCH()
-    dest_0x5ef: NO_MATCH()
-    dest_0x5ff: NO_MATCH()
-    dest_0x60f: NO_MATCH()
-    dest_0x61f: NO_MATCH()
-    dest_0x62f: NO_MATCH()
-    dest_0x63f: NO_MATCH()
-    dest_0x64f: NO_MATCH()
-    dest_0x65f: NO_MATCH()
-    dest_0x66f: NO_MATCH()
-    dest_0x67f: NO_MATCH()
-    dest_0x68f: NO_MATCH()
-    dest_0x69f: NO_MATCH()
-    dest_0x6af: NO_MATCH()
-    dest_0x6bf: NO_MATCH()
-    dest_0x6cf: NO_MATCH()
-    dest_0x6df: NO_MATCH()
-    dest_0x6ef: NO_MATCH()
-    dest_0x6ff: NO_MATCH()
-    dest_0x70f: NON_PAYABLE_FUNC_CHECK(0x70a08231, balanceOf_final_dest)
-    dest_0x71f: NO_MATCH()
-    dest_0x72f: NO_MATCH()
-    dest_0x73f: NO_MATCH()
-    dest_0x74f: NO_MATCH()
-    dest_0x75f: NO_MATCH()
-    dest_0x76f: NO_MATCH()
-    dest_0x77f: NO_MATCH()
-    dest_0x78f: NO_MATCH()
-    dest_0x79f: NO_MATCH()
-    dest_0x7af: NO_MATCH()
-    dest_0x7bf: NO_MATCH()
-    dest_0x7cf: NO_MATCH()
-    dest_0x7df: NO_MATCH()
-    dest_0x7ef: NON_PAYABLE_FUNC_CHECK(0x7ecebe00, nonces_final_dest)
-    dest_0x7ff: NO_MATCH()
-    dest_0x80f: NO_MATCH()
-    dest_0x81f: NO_MATCH()
-    dest_0x82f: NO_MATCH()
-    dest_0x83f: NO_MATCH()
-    dest_0x84f: NO_MATCH()
-    dest_0x85f: NON_PAYABLE_FUNC_CHECK(0x853828b6, withdrawAll_final_dest)
-    dest_0x86f: NO_MATCH()
-    dest_0x87f: NO_MATCH()
-    dest_0x88f: NO_MATCH()
-    dest_0x89f: NO_MATCH()
-    dest_0x8af: NO_MATCH()
-    dest_0x8bf: NO_MATCH()
-    dest_0x8cf: NO_MATCH()
-    dest_0x8df: NO_MATCH()
-    dest_0x8ef: NO_MATCH()
-    dest_0x8ff: NO_MATCH()
-    dest_0x90f: NO_MATCH()
-    dest_0x91f: NO_MATCH()
-    dest_0x92f: NO_MATCH()
-    dest_0x93f: NO_MATCH()
-    dest_0x94f: NON_PAYABLE_FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
-    dest_0x95f: NON_PAYABLE_FUNC_CHECK(0x95d89b41, symbol_final_dest)
-    dest_0x96f: NO_MATCH()
-    dest_0x97f: NO_MATCH()
-    dest_0x98f: NO_MATCH()
-    dest_0x99f: NO_MATCH()
-    dest_0x9af: NO_MATCH()
-    dest_0x9bf: NO_MATCH()
-    dest_0x9cf: NO_MATCH()
-    dest_0x9df: NO_MATCH()
-    dest_0x9ef: NO_MATCH()
-    dest_0x9ff: NO_MATCH()
-    dest_0xa0f: NO_MATCH()
-    dest_0xa1f: NO_MATCH()
-    dest_0xa2f: NO_MATCH()
-    dest_0xa3f: NO_MATCH()
-    dest_0xa4f: NO_MATCH()
-    dest_0xa5f: NO_MATCH()
-    dest_0xa6f: NO_MATCH()
-    dest_0xa7f: NO_MATCH()
-    dest_0xa8f: NO_MATCH()
-    dest_0xa9f: NON_PAYABLE_FUNC_CHECK(0xa9059cbb, transfer_final_dest)
-    dest_0xaaf: NO_MATCH()
-    dest_0xabf: NO_MATCH()
-    dest_0xacf: NON_PAYABLE_FUNC_CHECK(0xac9650d8, multicall_final_dest)
-    dest_0xadf: NO_MATCH()
-    dest_0xaef: NO_MATCH()
-    dest_0xaff: NO_MATCH()
-    dest_0xb0f: NO_MATCH()
-    dest_0xb1f: NO_MATCH()
-    dest_0xb2f: NO_MATCH()
-    dest_0xb3f: NO_MATCH()
-    dest_0xb4f: NO_MATCH()
-    dest_0xb5f: NO_MATCH()
-    dest_0xb6f: NO_MATCH()
-    dest_0xb7f: PAYABLE_FUNC_CHECK(0xb760faf9, depositTo_final_dest)
-    dest_0xb8f: NO_MATCH()
-    dest_0xb9f: NO_MATCH()
-    dest_0xbaf: NO_MATCH()
-    dest_0xbbf: NO_MATCH()
-    dest_0xbcf: NO_MATCH()
-    dest_0xbdf: NO_MATCH()
-    dest_0xbef: NO_MATCH()
-    dest_0xbff: NO_MATCH()
-    dest_0xc0f: NO_MATCH()
-    dest_0xc1f: NO_MATCH()
-    dest_0xc2f: NO_MATCH()
-    dest_0xc3f: NO_MATCH()
-    dest_0xc4f: NO_MATCH()
-    dest_0xc5f: NO_MATCH()
-    dest_0xc6f: NO_MATCH()
-    dest_0xc7f: NO_MATCH()
-    dest_0xc8f: NO_MATCH()
-    dest_0xc9f: NO_MATCH()
-    dest_0xcaf: NON_PAYABLE_FUNC_CHECK(0xca9add8f, withdrawAllTo_final_dest)
-    dest_0xcbf: NO_MATCH()
-    dest_0xccf: NO_MATCH()
-    dest_0xcdf: NO_MATCH()
-    dest_0xcef: NO_MATCH()
-    dest_0xcff: NO_MATCH()
-    dest_0xd0f: PAYABLE_FUNC_CHECK(0xd0e30db0, deposit_final_dest)
-    dest_0xd1f: NO_MATCH()
-    dest_0xd2f: NO_MATCH()
-    dest_0xd3f: NO_MATCH()
-    dest_0xd4f: NO_MATCH()
-    dest_0xd5f: NON_PAYABLE_FUNC_CHECK(0xd505accf, permit_final_dest)
-    dest_0xd6f: NO_MATCH()
-    dest_0xd7f: NO_MATCH()
-    dest_0xd8f: NO_MATCH()
-    dest_0xd9f: NO_MATCH()
-    dest_0xdaf: NO_MATCH()
-    dest_0xdbf: NO_MATCH()
-    dest_0xdcf: NO_MATCH()
-    dest_0xddf: NON_PAYABLE_FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
-    dest_0xdef: NO_MATCH()
-    dest_0xdff: NO_MATCH()
-    dest_0xe0f: NO_MATCH()
-    dest_0xe1f: NO_MATCH()
-    dest_0xe2f: NO_MATCH()
-    dest_0xe3f: NO_MATCH()
-    dest_0xe4f: NO_MATCH()
-    dest_0xe5f: NO_MATCH()
-    dest_0xe6f: NO_MATCH()
-    dest_0xe7f: NO_MATCH()
-    dest_0xe8f: NO_MATCH()
-    dest_0xe9f: NO_MATCH()
-    dest_0xeaf: NO_MATCH()
-    dest_0xebf: NO_MATCH()
-    dest_0xecf: NO_MATCH()
-    dest_0xedf: NO_MATCH()
-    dest_0xeef: NO_MATCH()
-    dest_0xeff: NO_MATCH()
-    dest_0xf0f: NO_MATCH()
-    dest_0xf1f: NO_MATCH()
-    dest_0xf2f: NO_MATCH()
-    dest_0xf3f: NO_MATCH()
-    dest_0xf4f: NO_MATCH()
-    dest_0xf5f: NO_MATCH()
-    dest_0xf6f: NO_MATCH()
-    dest_0xf7f: NO_MATCH()
-    dest_0xf8f: NO_MATCH()
-    dest_0xf9f: NO_MATCH()
-    dest_0xfaf: NO_MATCH()
-    dest_0xfbf: NO_MATCH()
-    dest_0xfcf: NO_MATCH()
-    dest_0xfdf: NO_MATCH()
-    dest_0xfef: NO_MATCH()
-    dest_0xfff: NO_MATCH()
+    dest_0x00f: __RECEIVE_CHECK(deposit_final_dest)
+    dest_0x01f: __NO_MATCH()
+    dest_0x02f: __NO_MATCH()
+    dest_0x03f: __NO_MATCH()
+    dest_0x04f: __NO_MATCH()
+    dest_0x05f: __NO_MATCH()
+    dest_0x06f: __NON_PAYABLE_FUNC_CHECK(0x06fdde03, name_final_dest)
+    dest_0x07f: __NO_MATCH()
+    dest_0x08f: __NO_MATCH()
+    dest_0x09f: __NON_PAYABLE_FUNC_CHECK(0x095ea7b3, approve_final_dest)
+    dest_0x0af: __NO_MATCH()
+    dest_0x0bf: __NO_MATCH()
+    dest_0x0cf: __NO_MATCH()
+    dest_0x0df: __NO_MATCH()
+    dest_0x0ef: __NO_MATCH()
+    dest_0x0ff: __NO_MATCH()
+    dest_0x10f: __NO_MATCH()
+    dest_0x11f: __NO_MATCH()
+    dest_0x12f: __NO_MATCH()
+    dest_0x13f: __NO_MATCH()
+    dest_0x14f: __NO_MATCH()
+    dest_0x15f: __NO_MATCH()
+    dest_0x16f: __NO_MATCH()
+    dest_0x17f: __NO_MATCH()
+    dest_0x18f: __NON_PAYABLE_FUNC_CHECK(0x18160ddd, totalSupply_final_dest)
+    dest_0x19f: __NO_MATCH()
+    dest_0x1af: __NO_MATCH()
+    dest_0x1bf: __NO_MATCH()
+    dest_0x1cf: __NO_MATCH()
+    dest_0x1df: __NO_MATCH()
+    dest_0x1ef: __NO_MATCH()
+    dest_0x1ff: __NO_MATCH()
+    dest_0x20f: __NON_PAYABLE_FUNC_CHECK(0x205c2878, withdrawTo_final_dest)
+    dest_0x21f: __NO_MATCH()
+    dest_0x22f: __NO_MATCH()
+    dest_0x23f: __NON_PAYABLE_FUNC_CHECK(0x23b872dd, transferFrom_final_dest)
+    dest_0x24f: __NO_MATCH()
+    dest_0x25f: __NO_MATCH()
+    dest_0x26f: __NO_MATCH()
+    dest_0x27f: __NO_MATCH()
+    dest_0x28f: __PAYABLE_FUNC_CHECK(0x28026ace, depositAndApprove_final_dest)
+    dest_0x29f: __NO_MATCH()
+    dest_0x2af: __NO_MATCH()
+    dest_0x2bf: __NO_MATCH()
+    dest_0x2cf: __NO_MATCH()
+    dest_0x2df: __NO_MATCH()
+    dest_0x2ef: __NON_PAYABLE_FUNC_CHECK(0x2e1a7d4d, withdraw_final_dest)
+    dest_0x2ff: __NO_MATCH()
+    dest_0x30f: __NO_MATCH()
+    dest_0x31f: __NON_PAYABLE_FUNC_CHECK(0x313ce567, decimals_final_dest)
+    dest_0x32f: __NO_MATCH()
+    dest_0x33f: __NO_MATCH()
+    dest_0x34f: __NO_MATCH()
+    dest_0x35f: __NO_MATCH()
+    dest_0x36f: __NON_PAYABLE_FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0x37f: __NO_MATCH()
+    dest_0x38f: __NO_MATCH()
+    dest_0x39f: __NO_MATCH()
+    dest_0x3af: __NO_MATCH()
+    dest_0x3bf: __NO_MATCH()
+    dest_0x3cf: __NO_MATCH()
+    dest_0x3df: __NO_MATCH()
+    dest_0x3ef: __NO_MATCH()
+    dest_0x3ff: __NO_MATCH()
+    dest_0x40f: __NO_MATCH()
+    dest_0x41f: __NO_MATCH()
+    dest_0x42f: __NO_MATCH()
+    dest_0x43f: __NO_MATCH()
+    dest_0x44f: __NO_MATCH()
+    dest_0x45f: __NO_MATCH()
+    dest_0x46f: __NON_PAYABLE_FUNC_CHECK(0x4648b24c, rescueLost_final_dest)
+    dest_0x47f: __NO_MATCH()
+    dest_0x48f: __NO_MATCH()
+    dest_0x49f: __NO_MATCH()
+    dest_0x4af: __NON_PAYABLE_FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
+    dest_0x4bf: __NO_MATCH()
+    dest_0x4cf: __NO_MATCH()
+    dest_0x4df: __NO_MATCH()
+    dest_0x4ef: __NO_MATCH()
+    dest_0x4ff: __NO_MATCH()
+    dest_0x50f: __NO_MATCH()
+    dest_0x51f: __NO_MATCH()
+    dest_0x52f: __NO_MATCH()
+    dest_0x53f: __NO_MATCH()
+    dest_0x54f: __NO_MATCH()
+    dest_0x55f: __NO_MATCH()
+    dest_0x56f: __NO_MATCH()
+    dest_0x57f: __NO_MATCH()
+    dest_0x58f: __NO_MATCH()
+    dest_0x59f: __NO_MATCH()
+    dest_0x5af: __NO_MATCH()
+    dest_0x5bf: __NO_MATCH()
+    dest_0x5cf: __NO_MATCH()
+    dest_0x5df: __NO_MATCH()
+    dest_0x5ef: __NO_MATCH()
+    dest_0x5ff: __NO_MATCH()
+    dest_0x60f: __NO_MATCH()
+    dest_0x61f: __NO_MATCH()
+    dest_0x62f: __NO_MATCH()
+    dest_0x63f: __NO_MATCH()
+    dest_0x64f: __NO_MATCH()
+    dest_0x65f: __NO_MATCH()
+    dest_0x66f: __NO_MATCH()
+    dest_0x67f: __NO_MATCH()
+    dest_0x68f: __NO_MATCH()
+    dest_0x69f: __NO_MATCH()
+    dest_0x6af: __NO_MATCH()
+    dest_0x6bf: __NO_MATCH()
+    dest_0x6cf: __NO_MATCH()
+    dest_0x6df: __NO_MATCH()
+    dest_0x6ef: __NO_MATCH()
+    dest_0x6ff: __NO_MATCH()
+    dest_0x70f: __NON_PAYABLE_FUNC_CHECK(0x70a08231, balanceOf_final_dest)
+    dest_0x71f: __NO_MATCH()
+    dest_0x72f: __NO_MATCH()
+    dest_0x73f: __NO_MATCH()
+    dest_0x74f: __NO_MATCH()
+    dest_0x75f: __NO_MATCH()
+    dest_0x76f: __NO_MATCH()
+    dest_0x77f: __NO_MATCH()
+    dest_0x78f: __NO_MATCH()
+    dest_0x79f: __NO_MATCH()
+    dest_0x7af: __NO_MATCH()
+    dest_0x7bf: __NO_MATCH()
+    dest_0x7cf: __NO_MATCH()
+    dest_0x7df: __NO_MATCH()
+    dest_0x7ef: __NON_PAYABLE_FUNC_CHECK(0x7ecebe00, nonces_final_dest)
+    dest_0x7ff: __NO_MATCH()
+    dest_0x80f: __NO_MATCH()
+    dest_0x81f: __NO_MATCH()
+    dest_0x82f: __NO_MATCH()
+    dest_0x83f: __NO_MATCH()
+    dest_0x84f: __NO_MATCH()
+    dest_0x85f: __NON_PAYABLE_FUNC_CHECK(0x853828b6, withdrawAll_final_dest)
+    dest_0x86f: __NO_MATCH()
+    dest_0x87f: __NO_MATCH()
+    dest_0x88f: __NO_MATCH()
+    dest_0x89f: __NO_MATCH()
+    dest_0x8af: __NO_MATCH()
+    dest_0x8bf: __NO_MATCH()
+    dest_0x8cf: __NO_MATCH()
+    dest_0x8df: __NO_MATCH()
+    dest_0x8ef: __NO_MATCH()
+    dest_0x8ff: __NO_MATCH()
+    dest_0x90f: __NO_MATCH()
+    dest_0x91f: __NO_MATCH()
+    dest_0x92f: __NO_MATCH()
+    dest_0x93f: __NO_MATCH()
+    dest_0x94f: __NON_PAYABLE_FUNC_CHECK(0x9470b0bd, withdrawFrom_final_dest)
+    dest_0x95f: __NON_PAYABLE_FUNC_CHECK(0x95d89b41, symbol_final_dest)
+    dest_0x96f: __NO_MATCH()
+    dest_0x97f: __NO_MATCH()
+    dest_0x98f: __NO_MATCH()
+    dest_0x99f: __NO_MATCH()
+    dest_0x9af: __NO_MATCH()
+    dest_0x9bf: __NO_MATCH()
+    dest_0x9cf: __NO_MATCH()
+    dest_0x9df: __NO_MATCH()
+    dest_0x9ef: __NO_MATCH()
+    dest_0x9ff: __NO_MATCH()
+    dest_0xa0f: __NO_MATCH()
+    dest_0xa1f: __NO_MATCH()
+    dest_0xa2f: __NO_MATCH()
+    dest_0xa3f: __NO_MATCH()
+    dest_0xa4f: __NO_MATCH()
+    dest_0xa5f: __NO_MATCH()
+    dest_0xa6f: __NO_MATCH()
+    dest_0xa7f: __NO_MATCH()
+    dest_0xa8f: __NO_MATCH()
+    dest_0xa9f: __NON_PAYABLE_FUNC_CHECK(0xa9059cbb, transfer_final_dest)
+    dest_0xaaf: __NO_MATCH()
+    dest_0xabf: __NO_MATCH()
+    dest_0xacf: __NON_PAYABLE_FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0xadf: __NO_MATCH()
+    dest_0xaef: __NO_MATCH()
+    dest_0xaff: __NO_MATCH()
+    dest_0xb0f: __NO_MATCH()
+    dest_0xb1f: __NO_MATCH()
+    dest_0xb2f: __NO_MATCH()
+    dest_0xb3f: __NO_MATCH()
+    dest_0xb4f: __NO_MATCH()
+    dest_0xb5f: __NO_MATCH()
+    dest_0xb6f: __NO_MATCH()
+    dest_0xb7f: __PAYABLE_FUNC_CHECK(0xb760faf9, depositTo_final_dest)
+    dest_0xb8f: __NO_MATCH()
+    dest_0xb9f: __NO_MATCH()
+    dest_0xbaf: __NO_MATCH()
+    dest_0xbbf: __NO_MATCH()
+    dest_0xbcf: __NO_MATCH()
+    dest_0xbdf: __NO_MATCH()
+    dest_0xbef: __NO_MATCH()
+    dest_0xbff: __NO_MATCH()
+    dest_0xc0f: __NO_MATCH()
+    dest_0xc1f: __NO_MATCH()
+    dest_0xc2f: __NO_MATCH()
+    dest_0xc3f: __NO_MATCH()
+    dest_0xc4f: __NO_MATCH()
+    dest_0xc5f: __NO_MATCH()
+    dest_0xc6f: __NO_MATCH()
+    dest_0xc7f: __NO_MATCH()
+    dest_0xc8f: __NO_MATCH()
+    dest_0xc9f: __NO_MATCH()
+    dest_0xcaf: __NON_PAYABLE_FUNC_CHECK(0xca9add8f, withdrawAllTo_final_dest)
+    dest_0xcbf: __NO_MATCH()
+    dest_0xccf: __NO_MATCH()
+    dest_0xcdf: __NO_MATCH()
+    dest_0xcef: __NO_MATCH()
+    dest_0xcff: __NO_MATCH()
+    dest_0xd0f: __PAYABLE_FUNC_CHECK(0xd0e30db0, deposit_final_dest)
+    dest_0xd1f: __NO_MATCH()
+    dest_0xd2f: __NO_MATCH()
+    dest_0xd3f: __NO_MATCH()
+    dest_0xd4f: __NO_MATCH()
+    dest_0xd5f: __NON_PAYABLE_FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0xd6f: __NO_MATCH()
+    dest_0xd7f: __NO_MATCH()
+    dest_0xd8f: __NO_MATCH()
+    dest_0xd9f: __NO_MATCH()
+    dest_0xdaf: __NO_MATCH()
+    dest_0xdbf: __NO_MATCH()
+    dest_0xdcf: __NO_MATCH()
+    dest_0xddf: __NON_PAYABLE_FUNC_CHECK(0xdd62ed3e, allowance_final_dest)
+    dest_0xdef: __NO_MATCH()
+    dest_0xdff: __NO_MATCH()
+    dest_0xe0f: __NO_MATCH()
+    dest_0xe1f: __NO_MATCH()
+    dest_0xe2f: __NO_MATCH()
+    dest_0xe3f: __NO_MATCH()
+    dest_0xe4f: __NO_MATCH()
+    dest_0xe5f: __NO_MATCH()
+    dest_0xe6f: __NO_MATCH()
+    dest_0xe7f: __NO_MATCH()
+    dest_0xe8f: __NO_MATCH()
+    dest_0xe9f: __NO_MATCH()
+    dest_0xeaf: __NO_MATCH()
+    dest_0xebf: __NO_MATCH()
+    dest_0xecf: __NO_MATCH()
+    dest_0xedf: __NO_MATCH()
+    dest_0xeef: __NO_MATCH()
+    dest_0xeff: __NO_MATCH()
+    dest_0xf0f: __NO_MATCH()
+    dest_0xf1f: __NO_MATCH()
+    dest_0xf2f: __NO_MATCH()
+    dest_0xf3f: __NO_MATCH()
+    dest_0xf4f: __NO_MATCH()
+    dest_0xf5f: __NO_MATCH()
+    dest_0xf6f: __NO_MATCH()
+    dest_0xf7f: __NO_MATCH()
+    dest_0xf8f: __NO_MATCH()
+    dest_0xf9f: __NO_MATCH()
+    dest_0xfaf: __NO_MATCH()
+    dest_0xfbf: __NO_MATCH()
+    dest_0xfcf: __NO_MATCH()
+    dest_0xfdf: __NO_MATCH()
+    dest_0xfef: __NO_MATCH()
+    dest_0xfff: __NO_MATCH()
 
     // Final function destinations.
     name_final_dest:
-        NAME(<zero>)
+        NAME()
     symbol_final_dest:
-        SYMBOL(<zero>)
+        SYMBOL()
     decimals_final_dest:
-        DECIMALS(<zero>)
+        DECIMALS()
     totalSupply_final_dest:
-        TOTAL_SUPPLY(<zero>)
+        TOTAL_SUPPLY()
     transferFrom_final_dest:
-        TRANSFER_FROM(<zero>)
+        TRANSFER_FROM()
     transfer_final_dest:
-        TRANSFER(<zero>)
+        TRANSFER()
     balanceOf_final_dest:
-        BALANCE_OF(<zero>)
+        BALANCE_OF()
     approve_final_dest:
-        APPROVE(<zero>)
+        APPROVE()
     allowance_final_dest:
-        ALLOWANCE(<zero>)
+        ALLOWANCE()
     // For payable functions `RETURNDATASIZE` is used as 2 gas `PUSH0` instead of `CALLVALUE`
     deposit_final_dest:
-        DEPOSIT(returndatasize)
+        DEPOSIT()
     depositTo_final_dest:
-        DEPOSIT_TO(returndatasize)
+        DEPOSIT_TO()
     depositAndApprove_final_dest:
-        DEPOSIT_AND_APPROVE(returndatasize)
+        DEPOSIT_AND_APPROVE()
     withdraw_final_dest:
-        WITHDRAW(<zero>)
+        WITHDRAW()
     withdrawTo_final_dest:
-        WITHDRAW_TO(<zero>)
+        WITHDRAW_TO()
     withdrawAll_final_dest:
-        WITHDRAW_ALL(<zero>)
+        WITHDRAW_ALL()
     withdrawAllTo_final_dest:
-        WITHDRAW_ALL_TO(<zero>)
+        WITHDRAW_ALL_TO()
     withdrawFrom_final_dest:
-        WITHDRAW_FROM(<zero>)
+        WITHDRAW_FROM()
     withdrawFromTo_final_dest:
-        WITHDRAW_FROM_TO(<zero>)
+        WITHDRAW_FROM_TO()
     DOMAIN_SEPARATOR_final_dest:
-        DOMAIN_SEPARATOR(<zero>)
+        DOMAIN_SEPARATOR()
     nonces_final_dest:
-        NONCES(<zero>)
+        NONCES()
     permit_final_dest:
-        PERMIT(<zero>)
+        PERMIT()
     multicall_final_dest:
         // Multicall does non-payable check so `callvalue` used as zero.
-        MULTICALL(<zero>)
+        MULTICALL()
     rescueLost_final_dest:
-        RESCUE_LOST(<zero>)
+        RESCUE_LOST()
 
     // Errors.
     insufficient_bal_error:
         __FUNC_SIG(InsufficientBalance)
-        _REVERT(<zero>)
+        _REVERT()
     insufficient_allowance_error:
         __FUNC_SIG(InsufficientAllowance)
-        _REVERT(<zero>)
+        _REVERT()
     permit_expired_error:
         __FUNC_SIG(PermitExpired)
-        _REVERT(<zero>)
+        _REVERT()
     invalid_signature_error:
         __FUNC_SIG(InvalidSignature)
-        _REVERT(<zero>)
+        _REVERT()
     fork_error:
         __FUNC_SIG(Fork)
-        _REVERT(<zero>)
+        _REVERT()
     empty_revert:
-        <zero> <zero> revert
-}
-
-#define macro MAIN() = takes(0) returns(0) {
-    // `CALLVALUE` is checked to be zero as part of the non-payable function checks
-    _MAIN(callvalue)
+        push0 push0 revert
 }

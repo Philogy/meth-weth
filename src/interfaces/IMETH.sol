@@ -6,16 +6,6 @@ import {IERC20} from "./IERC20.sol";
 /// @author philogy <https://github.com/philogy>
 interface IMETH is IERC20 {
     /*//////////////////////////////////////////////////////////////
-                            METADATA
-    //////////////////////////////////////////////////////////////*/
-
-    function symbol() external view returns (string memory);
-
-    function name() external view returns (string memory);
-
-    function decimals() external view returns (uint8);
-
-    /*//////////////////////////////////////////////////////////////
                             ERC2612
     //////////////////////////////////////////////////////////////*/
 

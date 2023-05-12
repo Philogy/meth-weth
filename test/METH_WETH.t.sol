@@ -195,9 +195,9 @@ contract METH_WETHTest is Test, METHBaseTest {
         if (_from != _to) {
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
             assertEq(meth.balanceOf(_to), _transferAmount);
+            assertEq(meth.nonces(_from), _fromNonce);
         } else {
             assertEq(meth.balanceOf(_from), _startAmount);
-            assertEq(meth.nonces(_from), _fromNonce);
         }
     }
 
@@ -293,7 +293,7 @@ contract METH_WETHTest is Test, METHBaseTest {
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256("Maximally Efficient Wrapped Ether"),
-                keccak256("1.0"),
+                keccak256("1"),
                 MAINNET_CHAIN_ID,
                 _weth
             )

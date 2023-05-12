@@ -2,8 +2,8 @@
 src = 'src'
 out = 'out'
 libs = ['lib']
-viaIR = false
 optimizer_runs = 0xffffffff
+evm_version = "shanghai"
 
 [fuzz]
 runs = 256
