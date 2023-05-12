@@ -13,9 +13,9 @@
 //               CONSTRUCTOR PARAMETERS                       //
 ////////////////////////////////////////////////////////////////
 /// TODO: Set
-#define constant DS_LOC1 = 0x168d
+#define constant DS_LOC1 = 0x1732
 /// TODO: Set
-#define constant DS_LOC2 = 0x176a
+#define constant DS_LOC2 = 0x180f
 
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
@@ -91,7 +91,7 @@
 }
 
 #define macro _RETURN_WORD(word_size) = takes(1) returns(0) {
-    // takes:                    [x]
+    // takes:                   [x]
                 push0 mstore // []
     <word_size> push0 return // []
 }
@@ -115,7 +115,7 @@
 #define macro _SEND_ETH() = takes(6) returns(0) {
     // takes:                [recipient, amount, 0, 0, 0, 0]
     gas call              // [success]
-    _BUBBLE_REVERT() // []
+    _BUBBLE_REVERT()      // []
     // returns:              []
 }
 
@@ -126,7 +126,7 @@
 
 #define macro _EMIT_TRANSFER(word_size) = takes(3) returns(0) {
     // takes:                 [amount, from, to]
-    push0 mstore          // [from, to]
+    push0 mstore           // [from, to]
     __EVENT_HASH(Transfer) // [Transfer.sig, from, to]
     <word_size> push0 log3
 }
@@ -160,7 +160,7 @@
     // -- Get amount and emit event.
     [BALANCE_MASK] and              // [amount]
     caller dup2                     // [amount, caller, amount]
-    _EMIT_WITHDRAWAL(msize)  // [amount]
+    _EMIT_WITHDRAWAL(msize)         // [amount]
     // returns:                        [amount]
 }
 
@@ -176,9 +176,9 @@
 }
 
 #define macro SYMBOL() = takes(0) returns(0) {
-    0x20              push0                   mstore
+    0x20              push0                    mstore
     [PACKED_SYMBOL_1] [PACKED_SYMBOL_OFFSET_1] mstore
-    msize             push0                   return
+    msize             push0                    return
 }
 
 #define macro DECIMALS() = takes(0) returns(0) {
@@ -191,7 +191,7 @@
 
 // ---- Transfer related methods
 #define macro BALANCE_OF() = takes(0) returns(0) {
-    0x04 _CLEAN_ADDRESS() // [account]
+    0x04 _CLEAN_ADDRESS()  // [account]
     _LOAD_BALANCE()        // [account.bal]
     _RETURN_WORD(msize)
 }
@@ -208,21 +208,21 @@
 
 #define macro _APPROVE() = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 _CLEAN_ADDRESS()   // [spender]
+    0x04 _CLEAN_ADDRESS()  // [spender]
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
     caller msize  mstore   // [amount, spender]
     dup2   msize  mstore   // [amount, spender]
     dup1                   // [amount, amount, spender]
-    0x40 push0 sha3       // [allowance.slot, amount, amount, spender]
+    0x40 push0 sha3        // [allowance.slot, amount, amount, spender]
     sstore                 // [amount, spender]
 
     // -- Emit Event
-    push0 mstore          // [spender]
+    push0 mstore           // [spender]
     caller                 // [owner, spender]
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
-    0x20 push0 log3       // []
+    0x20 push0 log3        // []
 }
 
 #define macro APPROVE() = takes(0) returns(0) {
@@ -235,7 +235,7 @@
     0x04 calldataload  // [owner, spender]
     msize mstore       // [spender]
     msize mstore       // []
-    msize push0 sha3  // [allowance.slot]
+    msize push0 sha3   // [allowance.slot]
     sload              // [allowance]
     _RETURN_WORD(0x20)
 }
@@ -247,7 +247,7 @@
     // takes:               [amount, from]
     dup2   msize  mstore // [amount, from]
     caller msize  mstore // [amount, from]
-    msize  push0 sha3   // [allowance.slot, amount, from]
+    msize  push0 sha3    // [allowance.slot, amount, from]
     dup1 sload           // [allowance, allowance.slot, amount, from]
     dup1 [INF_ALLOW_LIM] // [inf_allow_lim, allowance, allowance.slot, amount, from]
     lt <use_allowance_2pop> jumpi
@@ -269,23 +269,23 @@
 #define macro TRANSFER_FROM() = takes(0) returns(0) {
     // -- Load & Verify Params.
     0x24 _CLEAN_ADDRESS() // [to]
-    0x04 calldataload    // [from, to]
-    0x44 calldataload    // [amount, from, to]
+    0x04 calldataload     // [from, to]
+    0x44 calldataload     // [amount, from, to]
 
     // -- Verify Allowance
     _USE_ALLOWANCE(transfer_from_allowed_2pop)
         //                  [amount, from, to]
         _TRANSFER_FROM_END(0x20)
     transfer_from_allowed_2pop:
-        //                [_, _, amount, from, to]
-        pop pop        // [amount, from, to]
+        //                  [_, _, amount, from, to]
+        pop pop          // [amount, from, to]
         _TRANSFER_FROM_END(0x20)
 }
 
 #define macro _EMIT_DEPOSIT(word_size) = takes(1) returns(0) {
-    // takes:                  [to]
+    // takes:                 [to]
     callvalue push0 mstore // [to]
-    __EVENT_HASH(Deposit)   // [Deposit.sig, to]
+    __EVENT_HASH(Deposit)  // [Deposit.sig, to]
     <word_size> push0 log2 // []
 }
 
@@ -304,7 +304,7 @@
 
 #define macro DEPOSIT_TO() = takes(0) returns(0) {
     // -- Load params.
-    0x04 _CLEAN_ADDRESS()    // [to]
+    0x04 _CLEAN_ADDRESS()   // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
@@ -321,9 +321,9 @@
 
 #define macro _EMIT_WITHDRAWAL(word_size) = takes(2) returns(0) {
     // takes:                   [amount, from]
-    push0 mstore            // [from]
+    push0 mstore             // [from]
     __EVENT_HASH(Withdrawal) // [Withdrawal.sig, from]
-    <word_size> push0 log2  // []
+    <word_size> push0 log2   // []
 }
 
 #define macro _BURN_FROM_CALLER() = takes(2) returns(0) {
@@ -345,10 +345,10 @@
 
 #define macro WITHDRAW() = takes(0) returns(0) {
     _PUSH_4_ZEROS()     // [0, 0, 0, 0]
-    0x04 calldataload        // [amount, 0, 0, 0, 0]
-    caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
+    0x04 calldataload   // [amount, 0, 0, 0, 0]
+    caller dup2         // [amount, msg.sender, amount, 0, 0, 0, 0]
     _BURN_FROM_CALLER() // [amount, 0, 0, 0, 0]
-    caller                   // [msg.sender, amount, 0, 0, 0, 0]
+    caller              // [msg.sender, amount, 0, 0, 0, 0]
     _SEND_ETH()         // []
     stop
 }
@@ -356,12 +356,12 @@
 #define macro WITHDRAW_TO() = takes(0) returns(0) {
     // -- Setup stack.
     _PUSH_4_ZEROS()     // [0, 0, 0, 0]
-    0x24 calldataload        // [amount, 0, 0, 0, 0]
-    caller dup2              // [amount, msg.sender, amount, 0, 0, 0, 0]
+    0x24 calldataload   // [amount, 0, 0, 0, 0]
+    caller dup2         // [amount, msg.sender, amount, 0, 0, 0, 0]
     // -- Update balance and emit event.
     _BURN_FROM_CALLER() // [amount, 0, 0, 0, 0]
     // -- Transfer ETH
-    0x04 calldataload        // [to, amount, 0, 0, 0, 0]
+    0x04 calldataload   // [to, amount, 0, 0, 0, 0]
     _SEND_ETH()         // []
     stop
 }
@@ -372,20 +372,20 @@
     // -- Update balance and emit event.
     _WITHDRAW_ALL() // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
-    caller               // [msg.sender, amount, 0, 0, 0, 0]
+    caller          // [msg.sender, amount, 0, 0, 0, 0]
     _SEND_ETH()     // []
     stop
 }
 
 #define macro WITHDRAW_ALL_TO() = takes(0) returns(0) {
     // Push zeros before to avoid swaps later.
-    _PUSH_4_ZEROS()      // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()     // [0, 0, 0, 0]
     // -- Update balance and emit event.
-    _WITHDRAW_ALL()      // [amount, 0, 0, 0, 0]
+    _WITHDRAW_ALL()     // [amount, 0, 0, 0, 0]
     // -- Transfer ETH.
-    0x04 calldataload         // [to, amount, 0, 0, 0, 0]
+    0x04 calldataload   // [to, amount, 0, 0, 0, 0]
     _REQUIRE_NOT_ZERO() // [to, amount, 0, 0, 0, 0]
-    _SEND_ETH()          // []
+    _SEND_ETH()         // []
     stop
 }
 
@@ -404,18 +404,18 @@
     dup3 sstore              // [amount, from]
 
     // -- Emit Withdrawal
-    push0 mstore            // [from]
+    push0 mstore             // [from]
     __EVENT_HASH(Withdrawal) // [Transfer.sig, from]
-    0x20 push0 log2         // []
+    0x20 push0 log2          // []
 
     // returns:                 []
 }
 
 #define macro _WITHDRAW_FROM() = takes(7) returns(0) {
-    // takes:             [amount, from, amount, 0, 0, 0, 0]
+    // takes:        [amount, from, amount, 0, 0, 0, 0]
 
     _BURN_FROM()  // [amount, 0, 0, 0, 0]
-    caller             // [msg.sender, amount, 0, 0, 0, 0]
+    caller        // [msg.sender, amount, 0, 0, 0, 0]
     _SEND_ETH()   // []
 }
 
@@ -437,30 +437,30 @@
         stop
 }
 
-#define macro WITHDRAW_FROM_TO() = takes(7) returns(0) {
-    // takes:                    [amount, from, amount, 0, 0, 0, 0]
+#define macro _WITHDRAW_FROM_TO() = takes(7) returns(0) {
+    // takes:               [amount, from, amount, 0, 0, 0, 0]
 
     _BURN_FROM()         // [amount, 0, 0, 0, 0]
-    0x24 calldataload         // [to, amount, 0, 0, 0, 0]
+    0x24 calldataload    // [to, amount, 0, 0, 0, 0]
     _SEND_ETH()          // []
 }
 
 #define macro WITHDRAW_FROM_TO() = takes(0) returns(0) {
     // Load & Verify Params.
 
-    _PUSH_4_ZEROS()    // [0, 0, 0, 0]
+    _PUSH_4_ZEROS()         // [0, 0, 0, 0]
     0x04 calldataload       // [from, 0, 0, 0, 0]
     0x44 calldataload       // [amount, from, 0, 0, 0, 0]
     dup2                    // [amount, from, amount, 0, 0, 0, 0]
 
     _USE_ALLOWANCE(withdraw_from_to_allowed_2pop)
         //                     [amount, from, amount, 0, 0, 0, 0]
-        _WITHDRAW_FROM_TO()
+        _WITHDRAW_FROM_TO() // []
         stop
     withdraw_from_to_allowed_2pop:
         //                     [_, _, amount, from, amount, 0, 0, 0, 0]
         pop pop             // [amount, from, amount, 0, 0, 0, 0]
-        _WITHDRAW_FROM_TO()
+        _WITHDRAW_FROM_TO() // []
         stop
 }
 
@@ -522,12 +522,12 @@
     push0 mstore                    // [owner]
     // Copy v, r, s at once into memory.
     0x60 0x84 0x20 calldatacopy      // [owner]
-    0x20 push0 0x80 push0          // [0, 0x80, 0, 0x20, owner]
+    0x20 push0 0x80 push0            // [0, 0x80, 0, 0x20, owner]
     chainid                          // [ecrecover_precompile_addr, 0, 0x80, 0, 0x20, owner]
     gas staticcall                   // [success, owner]
     pop                              // [owner]
      // If ecrecover failed no data will be returned and mem[0:0x20] will be the message hash.
-    push0 mload                     // [recovered_signer, owner]
+    push0 mload                      // [recovered_signer, owner]
     // Bypassing check requires collision between owner address and message hash.
     sub                              // [owner != recovered_signer]
     // Prevent cross-chain replays.
@@ -544,8 +544,8 @@
     0x24 calldataload                // [total_calls]
 
     // Prepare header return data
-    0x20 push0 mstore               // [total_calls]
-    dup1  msize mstore               // [total_calls]
+    0x20 push0 mstore                // [total_calls]
+    dup1 msize mstore                // [total_calls]
 
     dup1 multicall_loop_start jumpi
         // Return empty array if length == 0.
@@ -568,7 +568,7 @@
         dup6                         // [ret_data_pointer, call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         calldatacopy                 // [call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         // Do self-delegatecall.
-        push0 push0                // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
+        push0 push0                  // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         swap2                        // [call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         dup6                         // [ret_data_pointer, call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
         address gas delegatecall     // [success, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
@@ -586,7 +586,7 @@
         // Move returndata pointer for returndata. 
         0x20 add                     // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         // Copy returndata into memory.
-        returndatasize push0        // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
+        returndatasize push0         // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         dup3                         // [ret_data_pointer, 0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         returndatacopy               // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
         // The returndata of all successful functions is a multiple of 0x20 so no zero padding and word alignment necessary.
@@ -606,13 +606,13 @@
 
 #define macro RESCUE_LOST() = takes(0) returns(0) {
     // Load lost tokens.
-    push0 _LOAD_BALANCE()         // [0.bal]
-    address _LOAD_BALANCE()       // [this.balance, 0.bal]
+    push0 _LOAD_BALANCE()        // [0.bal]
+    address _LOAD_BALANCE()      // [this.balance, 0.bal]
     // Emit Transfer events.
     [RECOVERY_ADDR] push0 dup4   // [0.bal, 0, recovery_addr, this.balance, 0.bal]
-    _EMIT_TRANSFER(msize)         // [this.balance, 0.bal]
+    _EMIT_TRANSFER(msize)        // [this.balance, 0.bal]
     [RECOVERY_ADDR] address dup3 // [this.balance, this, recovery_addr, this.balance, 0.bal]
-    _EMIT_TRANSFER(msize)         // [this.balance, 0.bal]
+    _EMIT_TRANSFER(msize)        // [this.balance, 0.bal]
     // Increase the balance of the rescue address.
     add                          // [total_lost]
     [RECOVERY_ADDR] sload        // [recovery_addr.data, total_lost]
