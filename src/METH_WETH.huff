@@ -16,8 +16,6 @@
 #define constant DS_LOC1 = 0x1733
 /// TODO: Set
 #define constant DS_LOC2 = 0x1810
-/// TODO: Set
-#define constant CSTR_SIZE = 0x97
 
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
@@ -34,7 +32,6 @@
 #define constant NONCE_MASK      = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
 #define constant NONCE_INCREMENT = 0x0000000000000000000000000000000100000000000000000000000000000000
 #define constant NONCE_SHIFT = 0x80
-
 
 ////////////////////////////////////////////////////////////////
 //                 METADATA CONSTANTS                         //
@@ -58,7 +55,7 @@
 #define constant RECOVERY_ADDR = 0x1212121212121212121212121212121212121212
 
 ////////////////////////////////////////////////////////////////
-//                      ERC721 CONSTANTS                      //
+//                      ERC712 CONSTANTS                      //
 ////////////////////////////////////////////////////////////////
 #define constant ERC712_ENCODE_HEAD = 0x1901
 // keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
@@ -73,12 +70,12 @@
 
 
 #define macro _REQUIRE_NOT_ZERO(zero) = takes(1) returns(1) {
-    // takes:        [to]
-    dup1          // [to, to]
-    notzero jumpi // [to]
+    // takes:         [to]
+    dup1           // [to, to]
+    not_zero jumpi // [to]
         __FUNC_SIG(RecipientZero) _REVERT(<zero>)
-    not_zero:     // [to]
-    // returns:      [to]
+    not_zero:      // [to]
+    // returns:       [to]
 }
 
 #define macro _CLEAN_ADDRESS() = takes(1) returns(1) {
@@ -90,7 +87,7 @@
 
 #define macro _REVERT(zero) = takes(1) returns(0) {
     <zero> mstore
-    0x04 0x1c return
+    0x04 0x1c revert
 }
 
 #define macro _RETURN_WORD(zero, word_size) = takes(1) returns(0) {
@@ -608,7 +605,7 @@
     <zero> return
 }
 
-#define macro _RESCUE_LOST(zero) = takes(0) returns(0) {
+#define macro RESCUE_LOST(zero) = takes(0) returns(0) {
     // Load lost tokens.
     <zero>  LOAD_BALANCE()       // [0.bal]
     address LOAD_BALANCE()       // [this.balance, 0.bal]
@@ -645,7 +642,8 @@
         0x0 0x0 revert
     expected_chain:
     COMPUTE_ERC712_DOMAIN_SEPARATOR()
-    [CSTR_SIZE] dup1      // [cstr_size, cstr_size, domain_separator]
+    __codesize(CONSTRUCTOR) dup1
+    //                       [cstr_size, cstr_size, domain_separator]
     codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
     sub                   // [runtime_size, cstr_size, domain_separator]
     dup1 swap2            // [cstr_size, runtime_size, runtime_size, domain_separator]
@@ -1035,19 +1033,19 @@
     // Errors.
     insufficient_bal_error:
         __FUNC_SIG(InsufficientBalance)
-        REVERT(<zero>)
+        _REVERT(<zero>)
     insufficient_allowance_error:
         __FUNC_SIG(InsufficientAllowance)
-        REVERT(<zero>)
+        _REVERT(<zero>)
     permit_expired_error:
         __FUNC_SIG(PermitExpired)
-        REVERT(<zero>)
+        _REVERT(<zero>)
     invalid_signature_error:
         __FUNC_SIG(InvalidSignature)
-        REVERT(<zero>)
+        _REVERT(<zero>)
     fork_error:
         __FUNC_SIG(Fork)
-        REVERT(<zero>)
+        _REVERT(<zero>)
     empty_revert:
         <zero> <zero> revert
 }
