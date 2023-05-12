@@ -23,12 +23,12 @@ This table contains a comparison of gas costs for limited function calls.
 |Action|WETH9|METH|Difference|Added Details|
 |------|-----|----|----------|-------------|
 |`deposit()`|45,038|44,628|-410|Wrap non-zero amount with no existing balance|
-|`transfer(...)`|51,534|50,590|-944|Transfer to account with zero balance|
+|`transfer(...)`|51,534|50,586|-948|Transfer to account with zero balance|
 |receive-fallback|27,631|27,463|-168|Wrap non-zero amount with no existing balance|
-|`approve(...)`|46,364|45,485|-879|Grant infinite allowance (requires truncating calldata for METH)|
+|`approve(...)`|46,364|45,481|-883|Grant infinite allowance (requires truncating calldata for METH)|
 |`withdraw(...)`|35,144|34,535|-609|Unwrap specific amount|
-|`transferFrom(...)`|36,965|36,059|-906|Transfer from non-zero to non-zero with infinite approval|
-|`transferFrom(...)`|35,688|34,188|-1,500|Transfer from non-zero to non-zero with finite approval|
+|`transferFrom(...)`|36,965|36,055|-910|Transfer from non-zero to non-zero with infinite approval|
+|`transferFrom(...)`|35,688|34,184|-1,504|Transfer from non-zero to non-zero with finite approval|
 |withdraw all remaining balance|30,344|29,570|-774|Unwrap all remaining (`withdraw(uint)` in WETH, `withdrawAll()` in METH)|
 
 
