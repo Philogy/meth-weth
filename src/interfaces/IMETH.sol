@@ -1,28 +1,10 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity >=0.6.2 <0.9.0;
 
 import {IERC20} from "./IERC20.sol";
 
 /// @author philogy <https://github.com/philogy>
 interface IMETH is IERC20 {
-    /*//////////////////////////////////////////////////////////////
-                            ERC2612
-    //////////////////////////////////////////////////////////////*/
-
-    function permit(
-        address _owner,
-        address _spender,
-        uint256 _value,
-        uint256 _deadline,
-        uint8 _v,
-        bytes32 _r,
-        bytes32 _s
-    ) external;
-
-    function nonces(address _owner) external view returns (uint256);
-
-    function DOMAIN_SEPARATOR() external view returns (bytes32);
-
     /*//////////////////////////////////////////////////////////////
                         WRAPPED ETHER
     //////////////////////////////////////////////////////////////*/
@@ -52,8 +34,6 @@ interface IMETH is IERC20 {
     /*//////////////////////////////////////////////////////////////
                             UTILITY
     //////////////////////////////////////////////////////////////*/
-
-    function multicall(bytes[] calldata _calls) external returns (bytes[] memory returnDatas);
 
     function rescueLost() external;
 

@@ -52,27 +52,13 @@ if you explicitly send ETH to the contract along with no calldata.
 The previously existing `withdraw`, `deposit` and `receive` fallback method behave like WETH9's
 methods meaning it's a drop-in replacement.
 
-The only differences that may have to be considered:
-1. Calling `permit` on _METH_ will not silently pass, _METH_ implements a permit method according to
-   the [ERC-2612](https://eips.ethereum.org/EIPS/eip-2612) standard
-2. Calling methods that are not implemented will not silently pass, if you need to wrap ETH to WETH
-   either send it directly with no calldata or use one of the `deposit` methods.
+The only difference that may have to be considered:
+Calling methods that are not implemented will not silently pass, if you need to wrap ETH to WETH
+either send it directly with no calldata or use one of the `deposit` methods. Calling an
+unimplemented function _may_ consume all gas sent to the contract.
 
 ### 👤 Improved UX
 
-**Multicall**
-
-Unlike WETH9, _METH_ allows call-batching via its `multicall(bytes[] memory calls)` method. This
-allows EOAs to trigger multiple methods in one transaction. This could be used to revoke multiple
-allowances in a single transaction or combine different calls together. However sending ETH to the
-`multicall` method is disallowed for security reasons meaning `deposit` and `depositTo` cannot be
-called as part of a `multicall` transaction.
-
-**ERC-2612 Permits**
-
-_METH_ is a [ERC-2612](https://eips.ethereum.org/EIPS/eip-2612) compliant ERC20 token allowing users to
-gas-lessly approve contracts and/or interact with applications that support the standard in a single
-on-chain transaction rather than two.
 
 ### 💻 Improved Contract-level Interaction
 

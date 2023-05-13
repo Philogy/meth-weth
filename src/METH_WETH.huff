@@ -4,18 +4,8 @@
 //                   BASE CONSTANTS                           //
 ////////////////////////////////////////////////////////////////
 /// @notice If changed for alternative chain, replace use of `CHAINID` as "push 1" in `permit`.
-#define constant TARGET_CHAIN_ID = 0x01 // Main deployment will be on Ethereum
 #define constant INF_ALLOW_LIM = 0xfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-#define constant MAX_UINT = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 #define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
-
-////////////////////////////////////////////////////////////////
-//               CONSTRUCTOR PARAMETERS                       //
-////////////////////////////////////////////////////////////////
-/// TODO: Set
-#define constant DS_LOC1 = 0x1732
-/// TODO: Set
-#define constant DS_LOC2 = 0x180f
 
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
@@ -23,15 +13,6 @@
 /// @dev Right bit shift that retrieves the unique upper bits of all selectors contained within the ABI.
 #define constant S_SHIFT = 0x14 // 20
 #define constant S_COVER = 0x0f // 15 (1111_2)
-
-////////////////////////////////////////////////////////////////
-//              STORAGE LAYOUT CONSTANTS                      //
-////////////////////////////////////////////////////////////////
-/// @dev Non zero slot allows for the omission of zero checks in certain view methods (e.g. `balanceOf`)
-#define constant BALANCE_MASK    = 0x00000000000000000000000000000000ffffffffffffffffffffffffffffffff
-#define constant NONCE_MASK      = 0xffffffffffffffffffffffffffffffff00000000000000000000000000000000
-#define constant NONCE_INCREMENT = 0x0000000000000000000000000000000100000000000000000000000000000000
-#define constant NONCE_SHIFT = 0x80
 
 ////////////////////////////////////////////////////////////////
 //                 METADATA CONSTANTS                         //
@@ -54,21 +35,6 @@
 /// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and this addresses.
 #define constant RECOVERY_ADDR = 0x1212121212121212121212121212121212121212
 
-////////////////////////////////////////////////////////////////
-//                      ERC712 CONSTANTS                      //
-////////////////////////////////////////////////////////////////
-#define constant ERC712_ENCODE_HEAD = 0x1901
-// keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
-#define constant ERC712_DOMAIN_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f
-// keccak256("Maximally Efficient Wrapped Ether")
-#define constant NAME_HASH = 0x6b9cc4b039c15ca6983e30e9ce1bbda1e4a82bcb7f7c783fb83f0ef373da695a
-// keccak256("1")
-#define constant VERSION_HASH = 0xc89efdaa54c0f20c7adf612882df0950f5a951637e0307cdcb4c672f298b8bc6
-#define constant DOMAIN_SEPARATOR_PLACEHOLDER = 0x4091cc981ab0391433dfcfc83900e539caf99b1ea50ebd1576d319483e4adeb4
-// keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")
-#define constant PERMIT_TYPE_HASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
-
-
 #define macro _REQUIRE_NOT_ZERO() = takes(1) returns(1) {
     // takes:         [to]
     dup1           // [to, to]
@@ -78,7 +44,7 @@
     // returns:       [to]
 }
 
-#define macro _CLEAN_ADDRESS() = takes(1) returns(1) {
+#define macro _LOAD_ADDRESS() = takes(1) returns(1) {
     // takes:             [calldata_pos]
     calldataload       // [addr_raw]
     [MAX_ADDR] and     // [addr]
@@ -119,11 +85,6 @@
     // returns:              []
 }
 
-// -- Internal Macros
-#define macro _LOAD_BALANCE() = takes(1) returns(1) {
-    sload [BALANCE_MASK] and
-}
-
 #define macro _EMIT_TRANSFER(word_size) = takes(3) returns(0) {
     // takes:                 [amount, from, to]
     push0 mstore           // [from, to]
@@ -135,17 +96,16 @@
     // takes:                  [from, amount, amount, from, to]
 
     // -- Update `from` Balance
-    sload dup1              // [from.data, from.data, amount, amount, from, to]
-    [BALANCE_MASK] and      // [from.bal, from.data, amount, amount, from, to]
-    dup3                    // [amount, from.bal, from.data, amount, amount, from, to]
+    sload dup1              // [from.bal, from.bal, amount, amount, from, to]
+    dup3                    // [amount, from.bal, from.bal, amount, amount, from, to]
     gt insufficient_bal_error jumpi
-    //                         [from.data, amount, amount, from, to]
-    sub                     // [from.data', amount, from, to]
+    //                         [from.bal, amount, amount, from, to]
+    sub                     // [from.bal', amount, from, to]
     dup3 sstore             // [amount, from, to]
 
     // -- Update `to` Balance
-    dup3 sload              // [to.data, amount, from, to]
-    dup2 add                // [to.data', amount, from, to]
+    dup3 sload              // [to.bal, amount, from, to]
+    dup2 add                // [to.bal', amount, from, to]
     dup4 sstore             // [amount, from, to]
 
     _EMIT_TRANSFER(<word_size>)
@@ -154,11 +114,9 @@
 #define macro _WITHDRAW_ALL() = takes(0) returns(1) {
     // takes:                          []
     // -- Update balance.
-    caller sload                    // [msg.sender.data]
-    dup1 [NONCE_MASK] and           // [msg.sender.data', msg.sender.data]
-    caller sstore                   // [msg.sender.data]
+    caller sload                    // [msg.sender.bal]
+    push0 caller sstore             // [msg.sender.bal]
     // -- Get amount and emit event.
-    [BALANCE_MASK] and              // [amount]
     caller dup2                     // [amount, caller, amount]
     _EMIT_WITHDRAWAL(msize)         // [amount]
     // returns:                        [amount]
@@ -191,13 +149,13 @@
 
 // ---- Transfer related methods
 #define macro BALANCE_OF() = takes(0) returns(0) {
-    0x04 _CLEAN_ADDRESS()  // [account]
-    _LOAD_BALANCE()        // [account.bal]
+    0x04 _LOAD_ADDRESS()   // [account]
+    sload                  // [account.bal]
     _RETURN_WORD(msize)
 }
 
 #define macro TRANSFER() = takes(0) returns(0) {
-    0x04 _CLEAN_ADDRESS() // [to]
+    0x04 _LOAD_ADDRESS()  // [to]
     caller                // [msg.sender, to]
     0x24 calldataload     // [amount, msg.sender, to]
     dup1 caller           // [msg.sender, amount, amount, msg.sender, to]
@@ -208,7 +166,7 @@
 
 #define macro _APPROVE() = takes(0) returns(0) {
     // -- Load & Verify Params
-    0x04 _CLEAN_ADDRESS()  // [spender]
+    0x04 _LOAD_ADDRESS()   // [spender]
     0x24 calldataload      // [amount, spender]
 
     // -- Store approval
@@ -249,7 +207,7 @@
     caller msize  mstore // [amount, from]
     msize  push0 sha3    // [allowance.slot, amount, from]
     dup1 sload           // [allowance, allowance.slot, amount, from]
-    dup1 [INF_ALLOW_LIM] // [inf_allow_lim, allowance, allowance.slot, amount, from]
+    dup1 [INF_ALLOW_LIM] // [inf_allow_lim, allowance, allowance, allowance.slot, amount, from]
     lt <use_allowance_2pop> jumpi
     //                      [allowance, allowance.slot, amount, from]
     dup1 dup4            // [amount, allowance, allowance, allowance.slot, amount, from]
@@ -268,8 +226,8 @@
 
 #define macro TRANSFER_FROM() = takes(0) returns(0) {
     // -- Load & Verify Params.
-    0x24 _CLEAN_ADDRESS() // [to]
-    0x04 calldataload     // [from, to]
+    0x24 _LOAD_ADDRESS()  // [to]
+    0x04 _LOAD_ADDRESS()  // [from, to]
     0x44 calldataload     // [amount, from, to]
 
     // -- Verify Allowance
@@ -290,9 +248,9 @@
 }
 
 #define macro _DEPOSIT() = takes(0) returns(0) {
-    caller sload            // [msg.sender.data]
+    caller sload            // [msg.sender.bal]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
-    callvalue add           // [msg.sender.data']
+    callvalue add           // [msg.sender.bal']
     caller sstore           // []
     caller _EMIT_DEPOSIT(msize)
 }
@@ -304,7 +262,7 @@
 
 #define macro DEPOSIT_TO() = takes(0) returns(0) {
     // -- Load params.
-    0x04 _CLEAN_ADDRESS()   // [to]
+    0x04 _LOAD_ADDRESS()    // [to]
     dup1 sload              // [to.bal, to]
     // Would need 3.4 x 10^20 ETH to overflow into nonce.
     callvalue add           // [to.bal', to]
@@ -331,13 +289,12 @@
 
     // -- Update Balance
     dup1                  // [amount, amount, msg.sender]
-    caller sload          // [msg.sender.data, amount, amount, msg.sender]
-    dup1                  // [msg.sender.data, msg.sender.data, amount, amount, msg.sender]
-    [BALANCE_MASK] and    // [msg.sender.bal, msg.sender.data, amount, amount, msg.sender]
-    dup3                  // [amount, msg.sender.bal, msg.sender.data, amount, amount, msg.sender]
+    caller sload          // [msg.sender.bal, amount, amount, msg.sender]
+    dup1                  // [msg.sender.bal, msg.sender.bal, amount, amount, msg.sender]
+    dup3                  // [amount, msg.sender.bal, msg.sender.bal, amount, amount, msg.sender]
     gt insufficient_bal_error jumpi
-    //                       [msg.sender.data, amount, amount, msg.sender]
-    sub                   // [msg.sender.data', amount, msg.sender]
+    //                       [msg.sender.bal, amount, amount, msg.sender]
+    sub                   // [msg.sender.bal', amount, msg.sender]
     caller sstore         // [amount, msg.sender]
 
     _EMIT_WITHDRAWAL(msize)
@@ -394,13 +351,12 @@
 
     // -- Update Balance
     dup1                     // [amount, amount, from]
-    dup3 sload               // [from.data, amount, amount, from]
-    dup1                     // [from.data, from.data, amount, amount]
-    [BALANCE_MASK] and       // [from.bal, from.data, amount, amount]
-    dup3                     // [amount, from.bal, from.data, amount, amount]
+    dup3 sload               // [from.bal, amount, amount, from]
+    dup1                     // [from.bal, from.bal, amount, amount]
+    dup3                     // [amount, from.bal, from.bal, amount, amount]
     gt insufficient_bal_error jumpi
-    //                          [from.data, amount, amount, from]
-    sub                      // [from.data', amount, from]
+    //                          [from.bal, amount, amount, from]
+    sub                      // [from.bal', amount, from]
     dup3 sstore              // [amount, from]
 
     // -- Emit Withdrawal
@@ -464,150 +420,10 @@
         stop
 }
 
-#define macro _IS_FORK() = takes(0) returns(1) {
-    [TARGET_CHAIN_ID] chainid sub
-}
-
-#define macro DOMAIN_SEPARATOR() = takes(0) returns(0) {
-    _IS_FORK() fork_error jumpi
-    [DOMAIN_SEPARATOR_PLACEHOLDER] _RETURN_WORD(msize)
-}
-
-#define macro NONCES() = takes(0) returns(0) {
-    0x04 _CLEAN_ADDRESS() // [account]
-    sload                 // [account.data]
-    [NONCE_SHIFT] shr     // [account.nonce]
-    _RETURN_WORD(msize)
-}
-
-#define macro PERMIT() = takes(0) returns(0) {
-    0x04 calldataload               // [owner]
-    0x24 calldataload               // [spender, owner]
-    0x44 calldataload               // [allowance, spender, owner]
-    0x64 calldataload               // [deadline, allowance, spender, owner]
-
-    dup1 timestamp gt               // [block.timestamp > deadline, deadline, allowance, spender, owner]
-    permit_expired_error jumpi      // [deadline, allowance, spender, owner]
-
-    // -- Prepare Basic Permit Params
-    [PERMIT_TYPE_HASH] msize mstore // [deadline, allowance, spender, owner]
-    dup4               msize mstore // [deadline, allowance, spender, owner]
-    dup3               msize mstore // [deadline, allowance, spender, owner]
-    dup2               msize mstore // [deadline, allowance, spender, owner]
-    // -- Prepare and Update Nonce
-    dup4 sload                      // [owner.data, deadline, allowance, spender, owner]
-    dup1 [NONCE_SHIFT] shr          // [owner.nonce, owner.data, deadline, allowance, spender, owner]
-    /***/              msize mstore // [owner.data, deadline, allowance, spender, owner]
-    [NONCE_INCREMENT] add           // [owner.data', deadline, allowance, spender, owner]
-    dup5 sstore                     // [deadline, allowance, spender, owner]
-    // -- Add Last Param (deadline)
-    /***/              msize mstore // [allowance, spender, owner]
-
-    // -- Update Allowance
-    0x40 0x20 sha3                   // [allowance.slot, allowance, spender, owner]
-    sstore                           // [spender, owner]
-    dup2 __EVENT_HASH(Approval)      // [Approval.sig, owner, spender, owner]
-    0x20 0x60 log3                   // [owner]
-
-    // -- Calculate Message Hash
-    msize push0 sha3                // [permit_struct_hash, owner]
-    // Constructor ensures code is padded such that length is exatly 0x1901.
-    [ERC712_ENCODE_HEAD]         push0 mstore
-    [DOMAIN_SEPARATOR_PLACEHOLDER] 0x20 mstore
-    //                                  [permit_struct_hash, owner]
-    0x40 mstore                      // [owner]
-    0x42 0x1e sha3                   // [encoded_struct, owner]
-
-    // -- Verify Signature
-    push0 mstore                    // [owner]
-    // Copy v, r, s at once into memory.
-    0x60 0x84 0x20 calldatacopy      // [owner]
-    0x20 push0 0x80 push0            // [0, 0x80, 0, 0x20, owner]
-    chainid                          // [ecrecover_precompile_addr, 0, 0x80, 0, 0x20, owner]
-    gas staticcall                   // [success, owner]
-    pop                              // [owner]
-     // If ecrecover failed no data will be returned and mem[0:0x20] will be the message hash.
-    push0 mload                      // [recovered_signer, owner]
-    // Bypassing check requires collision between owner address and message hash.
-    sub                              // [owner != recovered_signer]
-    // Prevent cross-chain replays.
-    _IS_FORK() or                    // [is_fork || owner != recovered_signer]
-    invalid_signature_error jumpi    // []
-    stop
-}
-
-#define macro MULTICALL() = takes(0) returns(0) {
-    0x04 calldataload                // [base_offset]
-    0x20 sub                         // [base_offset != 0x20]
-    empty_revert jumpi
-
-    0x24 calldataload                // [total_calls]
-
-    // Prepare header return data
-    0x20 push0 mstore                // [total_calls]
-    dup1 msize mstore                // [total_calls]
-
-    dup1 multicall_loop_start jumpi
-        // Return empty array if length == 0.
-        msize push0 return
-    multicall_loop_start:
-        //                              [total_calls]
-        dup1 0x5 shl 0x40 add        // [ret_data_pointer, total_calls]
-        0x40                         // [res_offset_pointer, ret_data_pointer, total_calls]
-        0x24                         // [call_pointer, res_offset_pointer, ret_data_pointer, total_calls]
-    multicall_loop_continue:
-        // Move call pointer to next call.
-        0x20 add                     // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Load call position (call_offset = calldataload(call_pointer) + 0x44).
-        dup1 calldataload 0x44 add   // [call_offset, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Load call size.
-        dup1 calldataload            // [call_size, call_offset, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Copy call data to memory.
-        dup1 swap2                   // [call_offset, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        0x20 add                     // [call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        dup6                         // [ret_data_pointer, call_data_start, call_size, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        calldatacopy                 // [call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Do self-delegatecall.
-        push0 push0                  // [0, 0, call_size, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        swap2                        // [call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        dup6                         // [ret_data_pointer, call_size, 0, 0, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        address gas delegatecall     // [success, call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        _BUBBLE_REVERT()       // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Store return offset for returndata.
-        swap1                        // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
-        0x40 dup4 sub                // [rel_ret_offset, res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
-        dup2 mstore                  // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
-        // Move result offset pointer for next loop.
-        0x20 add                     // [res_offset_pointer, call_pointer, ret_data_pointer, calls_left]
-        swap1                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Store returndatasize.
-        swap2                        // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        returndatasize dup2 mstore   // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        // Move returndata pointer for returndata. 
-        0x20 add                     // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        // Copy returndata into memory.
-        returndatasize push0         // [0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        dup3                         // [ret_data_pointer, 0, rdz, ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        returndatacopy               // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        // The returndata of all successful functions is a multiple of 0x20 so no zero padding and word alignment necessary.
-        // Move returndata pointer to be right after last returndata.
-        returndatasize add           // [ret_data_pointer, res_offset_pointer, call_pointer, calls_left]
-        swap2                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left]
-        // Decrement loop left `calls_left` counter.
-        swap3                        // [calls_left, res_offset_pointer, ret_data_pointer, call_pointer]
-        [MAX_UINT] add               // [calls_left', res_offset_pointer, ret_data_pointer, call_pointer]
-        swap3                        // [call_pointer, res_offset_pointer, ret_data_pointer, calls_left']
-        // Jump to next loop.
-        dup4 multicall_loop_continue jumpi
-    //                                  [call_pointer, res_offset_pointer, ret_data_pointer, 0]
-    swap2                            // [res_offset_pointer, ret_data_pointer, call_pointer, 0]
-    push0 return
-}
-
 #define macro RESCUE_LOST() = takes(0) returns(0) {
     // Load lost tokens.
-    push0 _LOAD_BALANCE()        // [0.bal]
-    address _LOAD_BALANCE()      // [this.balance, 0.bal]
+    push0 sload                  // [0.bal]
+    address sload                // [this.balance, 0.bal]
     // Emit Transfer events.
     [RECOVERY_ADDR] push0 dup4   // [0.bal, 0, recovery_addr, this.balance, 0.bal]
     _EMIT_TRANSFER(msize)        // [this.balance, 0.bal]
@@ -615,43 +431,14 @@
     _EMIT_TRANSFER(msize)        // [this.balance, 0.bal]
     // Increase the balance of the rescue address.
     add                          // [total_lost]
-    [RECOVERY_ADDR] sload        // [recovery_addr.data, total_lost]
-    add                          // [recovery_addr.data']
+    [RECOVERY_ADDR] sload        // [recovery_addr.bal, total_lost]
+    add                          // [recovery_addr.bal']
     [RECOVERY_ADDR] sstore       // []
     // Reset balance of "lost accounts" to 0.
     push0 push0  sstore          // []
     push0 address sstore         // []
     // Send ETH to rescue address
     stop
-}
-
-#define macro _COMPUTE_ERC712_DOMAIN_SEPARATOR() = takes(0) returns(1) {
-    [ERC712_DOMAIN_HASH] msize mstore
-    [NAME_HASH]          msize mstore
-    [VERSION_HASH]       msize mstore
-    chainid              msize mstore
-    address              msize mstore
-    msize 0x00 sha3
-}
-
-/// @dev Constructor not as optimized as it could be for the sake of favoring correctness over deployment cost
-#define macro CONSTRUCTOR() = takes(0) returns(0) {
-    [TARGET_CHAIN_ID] chainid eq
-    expected_chain jumpi
-        push0 push0 revert
-    expected_chain:
-    _COMPUTE_ERC712_DOMAIN_SEPARATOR()
-    __codesize(CONSTRUCTOR) dup1
-    //                       [cstr_size, cstr_size, domain_separator]
-    codesize              // [deploy_size, cstr_size, cstr_size, domain_separator]
-    sub                   // [runtime_size, cstr_size, domain_separator]
-    dup1 swap2            // [cstr_size, runtime_size, runtime_size, domain_separator]
-    0x0                   // [0, cstr_size, runtime_size, runtime_size, domain_separator]
-    codecopy              // [runtime_size, domain_separator]
-    swap1                 // [domain_separator, runtime_size]
-    dup1 [DS_LOC1] mstore // [domain_separator, runtime_size]
-         [DS_LOC2] mstore // [runtime_size]
-    returndatasize return
 }
 
 #define macro __SELECTOR() = takes(0) returns(1) {
@@ -776,7 +563,7 @@
     dest_0x33f: __NO_MATCH()
     dest_0x34f: __NO_MATCH()
     dest_0x35f: __NO_MATCH()
-    dest_0x36f: __NON_PAYABLE_FUNC_CHECK(0x3644e515, DOMAIN_SEPARATOR_final_dest)
+    dest_0x36f: __NO_MATCH()
     dest_0x37f: __NO_MATCH()
     dest_0x38f: __NO_MATCH()
     dest_0x39f: __NO_MATCH()
@@ -848,7 +635,7 @@
     dest_0x7bf: __NO_MATCH()
     dest_0x7cf: __NO_MATCH()
     dest_0x7df: __NO_MATCH()
-    dest_0x7ef: __NON_PAYABLE_FUNC_CHECK(0x7ecebe00, nonces_final_dest)
+    dest_0x7ef: __NO_MATCH()
     dest_0x7ff: __NO_MATCH()
     dest_0x80f: __NO_MATCH()
     dest_0x81f: __NO_MATCH()
@@ -894,7 +681,7 @@
     dest_0xa9f: __NON_PAYABLE_FUNC_CHECK(0xa9059cbb, transfer_final_dest)
     dest_0xaaf: __NO_MATCH()
     dest_0xabf: __NO_MATCH()
-    dest_0xacf: __NON_PAYABLE_FUNC_CHECK(0xac9650d8, multicall_final_dest)
+    dest_0xacf: __NO_MATCH()
     dest_0xadf: __NO_MATCH()
     dest_0xaef: __NO_MATCH()
     dest_0xaff: __NO_MATCH()
@@ -935,7 +722,7 @@
     dest_0xd2f: __NO_MATCH()
     dest_0xd3f: __NO_MATCH()
     dest_0xd4f: __NO_MATCH()
-    dest_0xd5f: __NON_PAYABLE_FUNC_CHECK(0xd505accf, permit_final_dest)
+    dest_0xd5f: __NO_MATCH()
     dest_0xd6f: __NO_MATCH()
     dest_0xd7f: __NO_MATCH()
     dest_0xd8f: __NO_MATCH()
@@ -1017,15 +804,6 @@
         WITHDRAW_FROM()
     withdrawFromTo_final_dest:
         WITHDRAW_FROM_TO()
-    DOMAIN_SEPARATOR_final_dest:
-        DOMAIN_SEPARATOR()
-    nonces_final_dest:
-        NONCES()
-    permit_final_dest:
-        PERMIT()
-    multicall_final_dest:
-        // Multicall does non-payable check so `callvalue` used as zero.
-        MULTICALL()
     rescueLost_final_dest:
         RESCUE_LOST()
 

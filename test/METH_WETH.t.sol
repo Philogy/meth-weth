@@ -4,6 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
+import {METHConstants} from "src/METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract METH_WETHTest is Test, METHBaseTest {
@@ -58,7 +59,6 @@ contract METH_WETHTest is Test, METHBaseTest {
         emit Deposit(_owner, _x);
         meth.deposit{value: _x}();
         assertEq(meth.balanceOf(_owner), _x);
-        assertEq(meth.nonces(_owner), 0);
     }
 
     function test_fuzzingDepositTo(address _from, address _to, uint128 _x) public {
@@ -68,20 +68,10 @@ contract METH_WETHTest is Test, METHBaseTest {
         emit Deposit(_to, _x);
         meth.depositTo{value: _x}(_to);
         assertEq(meth.balanceOf(_to), _x);
-        assertEq(meth.nonces(_to), 0);
     }
 
-    function test_fuzzingTransfer(
-        address _from,
-        address _to,
-        uint128 _startAmount,
-        uint128 _transferAmount,
-        uint128 _fromNonce,
-        uint128 _toNonce
-    ) public {
+    function test_fuzzingTransfer(address _from, address _to, uint128 _startAmount, uint128 _transferAmount) public {
         vm.assume(_startAmount >= _transferAmount);
-        _setNonce(_from, _fromNonce);
-        _setNonce(_to, _toNonce);
 
         vm.deal(_from, _startAmount);
         vm.prank(_from);
@@ -93,13 +83,11 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertTrue(meth.transfer(_to, _transferAmount));
 
         if (_from != _to) {
-            assertEq(meth.nonces(_from), _fromNonce, "transfer changed from nonce");
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount, "balance from after");
             assertEq(meth.balanceOf(_to), _transferAmount, "balance to after");
         } else {
             assertEq(meth.balanceOf(_from), _startAmount);
         }
-        assertEq(meth.nonces(_to), _toNonce, "transfer changed to nonce");
     }
 
     function test_fuzzingApprove(address _owner, address _spender, uint256 _allowance1, uint256 _allowance2) public {
@@ -119,44 +107,38 @@ contract METH_WETHTest is Test, METHBaseTest {
     }
 
     function test_fuzzingTransferFromInfinite(
-        address _operator,
-        address _from,
-        address _to,
-        uint256 _allowance,
-        uint128 _startAmount,
-        uint128 _transferAmount,
-        uint128 _fromNonce,
-        uint128 _toNonce
+        address operator,
+        address from,
+        address to,
+        uint256 allowance,
+        uint128 startAmount,
+        uint128 transferAmount
     ) public {
-        vm.assume(0xff00000000000000000000000000000000000000000000000000000000000000 <= _allowance);
-        vm.assume(_allowance >= _startAmount);
-        vm.assume(_startAmount >= _transferAmount);
+        allowance = bound(allowance, METHConstants.MIN_INF_ALLOWANCE, type(uint256).max);
+        startAmount = uint128(bound(startAmount, 0, type(uint128).max));
+        transferAmount = uint128(bound(transferAmount, 0, startAmount));
 
         // Setup.
-        _setNonce(_from, _fromNonce);
-        _setNonce(_to, _toNonce);
-        vm.deal(_from, _startAmount);
-        vm.prank(_from);
-        meth.deposit{value: _startAmount}();
-        vm.prank(_from);
-        meth.approve(_operator, _allowance);
+        vm.deal(from, startAmount);
+        vm.prank(from);
+        meth.deposit{value: startAmount}();
+        vm.prank(from);
+        meth.approve(operator, allowance);
 
         // Actual test.
-        vm.prank(_operator);
+        vm.prank(operator);
         vm.expectEmit(true, true, true, true);
-        emit Transfer(_from, _to, _transferAmount);
-        bool success = meth.transferFrom(_from, _to, _transferAmount);
+        emit Transfer(from, to, transferAmount);
+        bool success = meth.transferFrom(from, to, transferAmount);
         assertTrue(success);
 
-        assertEq(meth.allowance(_from, _operator), _allowance);
-        assertEq(meth.nonces(_to), _toNonce);
+        assertEq(meth.allowance(from, operator), allowance);
 
-        if (_from == _to) {
-            assertEq(meth.balanceOf(_from), _startAmount);
+        if (from == to) {
+            assertEq(meth.balanceOf(from), startAmount);
         } else {
-            assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
-            assertEq(meth.balanceOf(_to), _transferAmount);
-            assertEq(meth.nonces(_from), _fromNonce);
+            assertEq(meth.balanceOf(from), startAmount - transferAmount);
+            assertEq(meth.balanceOf(to), transferAmount);
         }
     }
 
@@ -166,17 +148,14 @@ contract METH_WETHTest is Test, METHBaseTest {
         address _to,
         uint256 _allowance,
         uint128 _startAmount,
-        uint128 _transferAmount,
-        uint128 _fromNonce,
-        uint128 _toNonce
+        uint128 _transferAmount
     ) public {
-        vm.assume(0xff00000000000000000000000000000000000000000000000000000000000000 >= _allowance);
+        _allowance =
+            bound(_allowance, _startAmount, 0xff00000000000000000000000000000000000000000000000000000000000000 - 1);
         vm.assume(_allowance >= _startAmount);
         vm.assume(_startAmount >= _transferAmount);
 
         // Setup.
-        _setNonce(_from, _fromNonce);
-        _setNonce(_to, _toNonce);
         vm.deal(_from, _startAmount);
         vm.prank(_from);
         meth.deposit{value: _startAmount}();
@@ -191,34 +170,12 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertTrue(success);
 
         assertEq(meth.allowance(_from, _operator), _allowance - _transferAmount);
-        assertEq(meth.nonces(_to), _toNonce);
         if (_from != _to) {
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
             assertEq(meth.balanceOf(_to), _transferAmount);
-            assertEq(meth.nonces(_from), _fromNonce);
         } else {
             assertEq(meth.balanceOf(_from), _startAmount);
         }
-    }
-
-    function testMulticall() public {
-        bytes[] memory calls = new bytes[](3);
-        calls[0] = abi.encodeCall(meth.decimals, ());
-        calls[1] = abi.encodeCall(meth.symbol, ());
-        calls[2] = abi.encodeCall(meth.name, ());
-        bytes[] memory retData = meth.multicall(calls);
-        assertEq(retData.length, 3);
-        assertEq(retData[0].length, 0x20);
-        assertEq(retData[0], abi.encode(uint8(18)));
-        assertEq(retData[1].length, 0x60);
-        assertEq(retData[1], abi.encode(string("METH")));
-        assertEq(retData[2].length, 0x80);
-        assertEq(retData[2], abi.encode(string("Maximally Efficient Wrapped Ether")));
-    }
-
-    function test_fuzzing_util_setNonce(address _account, uint128 _nonce) public {
-        _setNonce(_account, _nonce);
-        assertEq(meth.nonces(_account), _nonce);
     }
 
     function testRecovery() public {
@@ -239,11 +196,9 @@ contract METH_WETHTest is Test, METHBaseTest {
         _testNonPayable(meth.symbol.selector, "");
         _testNonPayable(meth.name.selector, "");
         _testNonPayable(meth.decimals.selector, "");
-        _testNonPayable(meth.DOMAIN_SEPARATOR.selector, "");
         _testNonPayable(meth.totalSupply.selector, "");
         _testNonPayable(meth.balanceOf.selector, abi.encode(vm.addr(1)));
         _testNonPayable(meth.allowance.selector, abi.encode(vm.addr(1), vm.addr(2)));
-        _testNonPayable(meth.nonces.selector, abi.encode(vm.addr(1)));
 
         // Non-view methods
         _testNonPayable(meth.withdraw.selector, abi.encode(uint256(0)));
@@ -260,10 +215,6 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(revertData, "", "msg.value revert should be empty");
     }
 
-    function test_fuzzingDefaultNonce(address account) public {
-        assertEq(meth.nonces(account), 0);
-    }
-
     function test_fuzzingDefaultBalance(address account) public {
         assertEq(meth.balanceOf(account), 0);
     }
@@ -272,31 +223,9 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(meth.allowance(owner, spender), 0);
     }
 
-    function testDomainSeparator() public {
-        assertEq(meth.DOMAIN_SEPARATOR(), _getDomainSeparator(address(meth)));
-    }
-
-    function _setNonce(address _account, uint128 _nonce) internal {
-        bytes32 accSlot = bytes32(uint256(uint160(_account)));
-        bytes32 slotContent = vm.load(address(meth), accSlot);
-        vm.store(address(meth), accSlot, bytes32((uint256(_nonce) << 128) | uint256(uint128(uint256(slotContent)))));
-    }
-
     function _loadWord(bytes memory _bytes, uint256 _offset) internal pure returns (uint256 word) {
         assembly {
             word := mload(add(_bytes, _offset))
         }
-    }
-
-    function _getDomainSeparator(address _weth) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
-                keccak256("Maximally Efficient Wrapped Ether"),
-                keccak256("1"),
-                MAINNET_CHAIN_ID,
-                _weth
-            )
-        );
     }
 }
