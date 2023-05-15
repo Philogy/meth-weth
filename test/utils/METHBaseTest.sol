@@ -19,7 +19,8 @@ abstract contract METHBaseTest is Test {
     function setUp() public {
         vm.chainId(MAINNET_CHAIN_ID);
         string[] memory args = new string[](1);
-        args[0] = string(abi.encodePacked("RECOVERY_ADDR=", recovery.toHexString()));
+        args[0] = string(abi.encodePacked("LOST_N_FOUND=", recovery.toHexString()));
+
         meth = IMETH((new HuffDeployer()).deploy("src/METH_WETH.huff", args, 0));
     }
 }

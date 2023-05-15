@@ -13,8 +13,20 @@ contract METH_WETHTest is Test, METHBaseTest {
     event Deposit(address indexed to, uint256 amount);
     event Withdrawal(address indexed from, uint256 amount);
 
+    address giver = makeAddr("__setup_giver");
+
     modifier realAddr(address _a) {
         vm.assume(_a != address(0));
+        _;
+    }
+
+    modifier acceptsETH(address recipient) {
+        address sender = makeAddr("tempSender");
+        uint256 prevBal = recipient.balance;
+        hoax(sender, 1 wei);
+        (bool success,) = recipient.call{value: 1 wei}("");
+        vm.assume(success);
+        vm.deal(recipient, prevBal);
         _;
     }
 
@@ -37,6 +49,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(ret.length, 0x80);
         assertEq(_loadWord(ret, 0x20), 0x20);
         assertEq(_loadWord(ret, 0x40), 33);
+        assertEq(_loadWord(ret, 0x60), uint256(bytes32("Maximally Efficient Wrapped Ethe")));
         assertEq(_loadWord(ret, 0x80), uint256(bytes32("r")));
         string memory name = abi.decode(ret, (string));
         assertEq(name, "Maximally Efficient Wrapped Ether");
@@ -150,8 +163,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint128 _startAmount,
         uint128 _transferAmount
     ) public {
-        _allowance =
-            bound(_allowance, _startAmount, 0xff00000000000000000000000000000000000000000000000000000000000000 - 1);
+        _allowance = bound(_allowance, _startAmount, METHConstants.MIN_INF_ALLOWANCE - 1);
         vm.assume(_allowance >= _startAmount);
         vm.assume(_startAmount >= _transferAmount);
 
@@ -176,6 +188,66 @@ contract METH_WETHTest is Test, METHBaseTest {
         } else {
             assertEq(meth.balanceOf(_from), _startAmount);
         }
+    }
+
+    function test_fuzzingWithdrawFromFiniteAllowance(
+        address operator,
+        address owner,
+        uint256 startAmount,
+        uint256 withdrawAmount,
+        uint256 allowance
+    ) public acceptsETH(operator) {
+        vm.assume(operator != address(meth));
+        allowance = bound(allowance, 0, METHConstants.MIN_INF_ALLOWANCE - 1);
+        withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
+
+        vm.prank(owner);
+        meth.approve(operator, allowance);
+        _grantMeth(owner, startAmount);
+
+        uint256 prevBal = operator.balance;
+
+        vm.prank(operator);
+        vm.expectEmit(true, true, true, true);
+        emit Withdrawal(owner, withdrawAmount);
+        meth.withdrawFrom(owner, withdrawAmount);
+
+        assertEq(operator.balance, prevBal + withdrawAmount);
+        assertEq(meth.balanceOf(owner), startAmount - withdrawAmount);
+        assertEq(meth.allowance(owner, operator), allowance - withdrawAmount);
+    }
+
+    function test_broken() public {
+        setUp();
+        test_fuzzingWithdrawFromFiniteAllowance(
+            0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000003, 0, 0, 0
+        );
+    }
+
+    function test_fuzzingWithdrawFromInfiniteAllowance(
+        address operator,
+        address owner,
+        uint256 startAmount,
+        uint256 withdrawAmount,
+        uint256 allowance
+    ) public acceptsETH(operator) {
+        allowance = bound(allowance, METHConstants.MIN_INF_ALLOWANCE, type(uint256).max);
+        withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
+
+        vm.prank(owner);
+        meth.approve(operator, allowance);
+        _grantMeth(owner, startAmount);
+
+        uint256 prevBal = operator.balance;
+
+        vm.prank(operator);
+        vm.expectEmit(true, true, true, true);
+        emit Withdrawal(owner, withdrawAmount);
+        meth.withdrawFrom(owner, withdrawAmount);
+
+        assertEq(operator.balance, prevBal + withdrawAmount);
+        assertEq(meth.balanceOf(owner), startAmount - withdrawAmount);
+        assertEq(meth.allowance(owner, operator), allowance);
     }
 
     function testRecovery() public {
@@ -227,5 +299,18 @@ contract METH_WETHTest is Test, METHBaseTest {
         assembly {
             word := mload(add(_bytes, _offset))
         }
+    }
+
+    function _grantMeth(address recipient, uint256 amount) internal {
+        hoax(giver, amount);
+        meth.depositTo{value: amount}(recipient);
+    }
+
+    function min(uint256 x, uint256 y) internal pure returns (uint256) {
+        return x < y ? x : y;
+    }
+
+    function max(uint256 x, uint256 y) internal pure returns (uint256) {
+        return x > y ? x : y;
     }
 }
