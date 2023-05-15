@@ -95,11 +95,11 @@ contract ReferenceMETH is IMETH {
         _sendEth(_to, _amount);
     }
 
-    function rescueLost() external {
+    function sweepLost() external {
         uint256 zeroBal = balanceOf[address(0)];
         uint256 thisBal = balanceOf[address(this)];
         emit Transfer(address(0), recovery, zeroBal);
-        emit Transfer(address(this), recovery, zeroBal);
+        emit Transfer(address(this), recovery, thisBal);
         balanceOf[address(0)] = 0;
         balanceOf[address(this)] = 0;
         balanceOf[recovery] += zeroBal + thisBal;

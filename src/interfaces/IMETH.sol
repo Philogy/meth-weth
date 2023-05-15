@@ -35,11 +35,5 @@ interface IMETH is IERC20 {
                             UTILITY
     //////////////////////////////////////////////////////////////*/
 
-    function rescueLost() external;
-
-    // Errors
-    error InsufficientBalance();
-    error InsufficientAllowance();
-    error PermitExpired();
-    error InvalidSignature();
+    function sweepLost() external;
 }

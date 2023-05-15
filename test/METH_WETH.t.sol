@@ -187,7 +187,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         vm.prank(user);
         meth.depositTo{value: 0.3 ether}(address(meth));
         assertEq(meth.balanceOf(address(meth)), 0.3 ether);
-        meth.rescueLost();
+        meth.sweepLost();
         assertEq(meth.balanceOf(recovery), 2.8 ether);
     }
 
