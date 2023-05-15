@@ -22,14 +22,14 @@ This table contains a comparison of gas costs for limited function calls.
 
 |Action|WETH9|METH|Difference|Added Details|
 |------|-----|----|----------|-------------|
-|`deposit()`|45,038|44,628|-410|Wrap non-zero amount with no existing balance|
-|`transfer(...)`|51,534|50,586|-948|Transfer to account with zero balance|
-|receive-fallback|27,631|27,463|-168|Wrap non-zero amount with no existing balance|
-|`approve(...)`|46,364|45,481|-883|Grant infinite allowance (requires truncating calldata for METH)|
-|`withdraw(...)`|35,144|34,535|-609|Unwrap specific amount|
-|`transferFrom(...)`|36,965|36,055|-910|Transfer from non-zero to non-zero with infinite approval|
-|`transferFrom(...)`|35,688|34,184|-1,504|Transfer from non-zero to non-zero with finite approval|
-|withdraw all remaining balance|30,344|29,570|-774|Unwrap all remaining (`withdraw(uint)` in WETH, `withdrawAll()` in METH)|
+|`deposit()`|45,038|44,627|-411|Wrap non-zero amount with no existing balance|
+|`transfer(...)`|51,534|50,572|-962|Transfer to account with zero balance|
+|receive-fallback|27,631|27,459|-172|Wrap non-zero amount with existing balance|
+|`approve(...)`|46,364|45,480|-884|Grant infinite allowance (requires truncating calldata for METH)|
+|`withdraw(...)`|35,144|34,521|-623|Unwrap specific amount|
+|`transferFrom(...)`|36,965|36,046|-919|Transfer from non-zero to non-zero with infinite approval|
+|`transferFrom(...)`|35,688|34,171|-1,517|Transfer from non-zero to non-zero with finite approval|
+|withdraw all remaining balance|30,344|29,556|-788|Unwrap all remaining (`withdraw(uint)` in WETH, `withdrawAll()` in METH)|
 
 
 
@@ -58,6 +58,7 @@ either send it directly with no calldata or use one of the `deposit` methods. Ca
 unimplemented function _may_ consume all gas sent to the contract.
 
 ### 👤 Improved UX
+
 
 
 ### 💻 Improved Contract-level Interaction
@@ -112,10 +113,7 @@ variables. Certain methods also allow contracts to avoid otherwise unused `recei
 
 ### ⚡ Highly Optimized
 _METH_ is written directly in bytecode-level assembly using the [Huff](https://huff.sh) langauge, ensuring it's implementation is as efficient
-as possible. Certain "require"s are done using the branchless trick demonstrated by [Vectorized](https://twitter.com/optimizoor/status/1611614269900001280).
-The branchless requires consume all gas when reverting so they're only used for conditions that can
-be verified before submitting a call / transaction such as zero-address and signature validity
-checks.
+as possible.
 
 ## ⚙️ "METH" under the hood
 
