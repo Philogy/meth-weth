@@ -2,14 +2,12 @@
 pragma solidity 0.8.15;
 
 import {IMETH} from "./interfaces/IMETH.sol";
+import {METHConstants} from "./METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
-
-    uint256 internal constant MIN_INF_ALLOW = 0xff00000000000000000000000000000000000000000000000000000000000000;
-    uint256 internal constant CHAIN_ID = 0x1;
 
     address internal immutable recovery;
 
@@ -17,28 +15,28 @@ contract ReferenceMETH is IMETH {
     string public constant name = "Maximally Efficient Wrapped Ether";
     uint8 public constant decimals = 18;
 
-    constructor(address _recovery) {
-        recovery = _recovery;
+    constructor(address recovery_) {
+        recovery = recovery_;
     }
 
     function totalSupply() external view returns (uint256) {
         return address(this).balance;
     }
 
-    function transfer(address _to, uint256 _amount) external returns (bool) {
-        _transfer(msg.sender, _to, _amount);
+    function transfer(address to, uint256 amount) external returns (bool) {
+        _transfer(msg.sender, to, amount);
         return true;
     }
 
-    function transferFrom(address _from, address _to, uint256 _amount) external returns (bool) {
-        _useAllowance(_from, _amount);
-        _transfer(_from, _to, _amount);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+        _useAllowance(from, amount);
+        _transfer(from, to, amount);
         return true;
     }
 
-    function approve(address _spender, uint256 _amount) public returns (bool) {
-        allowance[msg.sender][_spender] = _amount;
-        emit Approval(msg.sender, _spender, _amount);
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
         return true;
     }
 
@@ -51,14 +49,16 @@ contract ReferenceMETH is IMETH {
         emit Deposit(msg.sender, msg.value);
     }
 
-    function depositTo(address _to) external payable {
-        balanceOf[_to] += msg.value;
-        emit Deposit(_to, msg.value);
+    function depositTo(address to) external payable {
+        unchecked {
+            balanceOf[to] += msg.value;
+        }
+        emit Deposit(to, msg.value);
     }
 
-    function depositAndApprove(address _spender, uint256 _amount) external {
+    function depositAndApprove(address spender, uint256 amount) external {
         deposit();
-        approve(_spender, _amount);
+        approve(spender, amount);
     }
 
     function withdrawAll() external {
@@ -67,32 +67,32 @@ contract ReferenceMETH is IMETH {
         _sendEth(msg.sender, amount);
     }
 
-    function withdrawAllTo(address _to) external {
+    function withdrawAllTo(address to) external {
         uint256 amount = balanceOf[msg.sender];
         _withdraw(msg.sender, amount);
-        _sendEth(_to, amount);
+        _sendEth(to, amount);
     }
 
-    function withdraw(uint256 _amount) external {
-        _withdraw(msg.sender, _amount);
-        _sendEth(msg.sender, _amount);
+    function withdraw(uint256 amount) external {
+        _withdraw(msg.sender, amount);
+        _sendEth(msg.sender, amount);
     }
 
-    function withdrawTo(address _to, uint256 _amount) external {
-        _withdraw(msg.sender, _amount);
-        _sendEth(_to, _amount);
+    function withdrawTo(address to, uint256 amount) external {
+        _withdraw(msg.sender, amount);
+        _sendEth(to, amount);
     }
 
-    function withdrawFrom(address _from, uint256 _amount) external {
-        _useAllowance(_from, _amount);
-        _withdraw(_from, _amount);
-        _sendEth(msg.sender, _amount);
+    function withdrawFrom(address from, uint256 amount) external {
+        _useAllowance(from, amount);
+        _withdraw(from, amount);
+        _sendEth(msg.sender, amount);
     }
 
-    function withdrawFromTo(address _from, address _to, uint256 _amount) external {
-        _useAllowance(_from, _amount);
-        _withdraw(_from, _amount);
-        _sendEth(_to, _amount);
+    function withdrawFromTo(address from, address to, uint256 amount) external {
+        _useAllowance(from, amount);
+        _withdraw(from, amount);
+        _sendEth(to, amount);
     }
 
     function sweepLost() external {
@@ -102,36 +102,37 @@ contract ReferenceMETH is IMETH {
         emit Transfer(address(this), recovery, thisBal);
         balanceOf[address(0)] = 0;
         balanceOf[address(this)] = 0;
-        balanceOf[recovery] += zeroBal + thisBal;
-    }
-
-    function _transfer(address _from, address _to, uint256 _amount) internal {
-        if (balanceOf[_from] < _amount) revert InsufficientBalance();
-        balanceOf[_from] -= _amount;
-        balanceOf[_to] += _amount;
-        emit Transfer(_from, _to, _amount);
-    }
-
-    function _useAllowance(address _owner, uint256 _amount) internal {
-        if (allowance[_owner][msg.sender] < MIN_INF_ALLOW) {
-            if (allowance[_owner][msg.sender] < _amount) revert InsufficientAllowance();
-            allowance[_owner][msg.sender] -= _amount;
+        unchecked {
+            balanceOf[recovery] += zeroBal + thisBal;
         }
     }
 
-    function _withdraw(address _from, uint256 _amount) internal {
-        if (balanceOf[_from] < _amount) revert InsufficientBalance();
-        balanceOf[_from] -= _amount;
-        emit Withdrawal(_from, _amount);
+    function _transfer(address from, address to, uint256 amount) internal {
+        require(balanceOf[from] >= amount);
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
     }
 
-    function _sendEth(address _to, uint256 _amount) internal {
-        (bool success,) = _to.call{value: _amount}("");
-        _bubbleRevert(success);
+    function _useAllowance(address owner, uint256 amount) internal {
+        if (allowance[owner][msg.sender] < METHConstants.MIN_INF_ALLOWANCE) {
+            require(allowance[owner][msg.sender] >= amount);
+            allowance[owner][msg.sender] -= amount;
+        }
     }
 
-    function _bubbleRevert(bool _success) internal pure {
-        if (!_success) {
+    function _withdraw(address from, uint256 amount) internal {
+        uint256 bal = balanceOf[from];
+        require(bal >= amount);
+        unchecked {
+            balanceOf[from] = bal - amount;
+        }
+        emit Withdrawal(from, amount);
+    }
+
+    function _sendEth(address to, uint256 amount) internal {
+        (bool success,) = to.call{value: amount}("");
+        if (!success) {
             assembly {
                 returndatacopy(0x00, 0x00, returndatasize())
                 revert(0x00, returndatasize())
