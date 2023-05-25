@@ -203,21 +203,29 @@
 }
 
 #define macro ALLOWANCE() = takes(0) returns(0) {
-    0x24 calldataload  // [spender]
-    0x04 calldataload  // [owner, spender]
-    msize mstore       // [spender]
-    msize mstore       // []
-    msize push0 sha3   // [allowance.slot]
-    sload              // [allowance]
-    _RETURN_WORD(0x20)
+    0x04 calldataload  // [owner]
+    msize              // [0x00, owner]
+    mstore             // []
+    msize              // [0x20]
+    0x24 calldataload  // [spender, 0x20]
+    msize              // [0x20, spender 0x20]
+    mstore             // [0x20]
+    msize              // [0x40, 0x20]
+    push0              // [0x00, 0x40, 0x20]
+    sha3               // [allowance_slot, 0x20]
+    sload              // [allowance, 0x20]
+    push0              // [0x00, allowance, 0x20]
+    mstore             // [0x20]
+    push0              // [0x00, 0x20]
+    return             // [] -- end
 }
 
-#define macro _TRANSFER_FROM_END(word_size) = takes(4) returns(0) {
+#define macro _TRANSFER_FROM_END() = takes(4) returns(0) {
     // takes:                 [to, amount, from, has_error]
     dup2                   // [amount, to, amount, from, has_error]
     dup4                   // [from, amount, to, amount, from, has_error]
-    _TRANSFER(<word_size>) // []
-    _RETURN_TRUE(<word_size>)
+    _TRANSFER(0x20)        // []
+    _RETURN_TRUE(0x20)
 }
 
 /**
@@ -266,11 +274,11 @@
     sub                  // [allowance', allowance_slot, to, amount, from, has_error]
     swap1                // [allowance_slot, allowance', to, amount, from, has_error]
     sstore               // [to, amount, from, has_error]
-        _TRANSFER_FROM_END(0x20)
+        _TRANSFER_FROM_END()
     transferFrom_inf_allow:
         //                  [to, to, to, amount, from, has_error]
         pop pop          // [to, amount, from, has_error]
-        _TRANSFER_FROM_END(0x20)
+        _TRANSFER_FROM_END()
 }
 
 #define macro _EMIT_DEPOSIT(word_size) = takes(1) returns(0) {
@@ -440,6 +448,62 @@
         caller           // [caller, amount, 0, 0, 0, 0]
         _SEND_ETH()      // []
         stop
+}
+
+#define macro _WITHDRAW_FROM_TO_END() = takes(6) returns(0) {
+    // takes:               [from, amount, 0, 0, 0, has_error]
+    dup1                 // [from, from, amount, 0, 0, 0, has_error]
+    sload                // [from_bal, from, amount, 0, 0, 0, has_error]
+    swap6                // [has_error, from, amount, 0, 0, 0, from_bal]
+    dup7                 // [from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    dup4                 // [amount, from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    gt                   // [amount > from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    or                   // [has_error', from, amount, 0, 0, 0, from_bal]
+    empty_revert jumpi   // [from, amount, 0, 0, 0, from_bal]
+
+    dup2                 // [amount, from, amount, 0, 0, 0, from_bal]
+    push0                // [0, amount, from, amount, 0, 0, 0, from_bal]
+    swap7                // [from_bal, amount, from, amount, 0, 0, 0, 0]
+    sub                  // [from_bal', from, amount, 0, 0, 0, 0]
+    dup2                 // [from, from_bal', from, amount, 0, 0, 0, 0]
+    sstore               // [from, amount, 0, 0, 0, 0]
+    dup2                 // [amount, from, amount, 0, 0, 0, 0]
+    _EMIT_WITHDRAWAL(0x20)
+    //                      [amount, 0, 0, 0, 0]
+    0x24 calldataload    // [to, amount, 0, 0, 0, 0]
+    _SEND_ETH()          // []
+    stop
+}
+
+#define macro WITHDRAW_FROM_TO() = takes(1) returns(0) {
+    // takes:               [has_error]
+
+    // -- Initial stack setup.
+    push0 push0 push0    // [0, 0, 0, has_error]
+    0x44 calldataload    // [amount, 0, 0, 0, has_error]
+    0x10 _LOAD_ADDRESS() // [from, amount, 0, 0, 0, has_error]
+    dup1                 // [from, from, amount, 0, 0, 0, has_error]
+    // -- Allowance load & check.
+    _GET_ALLOWANCE(withdrawFromTo_inf_allow)
+    //                      [allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
+    swap7                // [has_error, allowance_slot, from, amount, 0, 0, 0, allowance]
+    dup8                 // [allowance, has_error, allowance_slot, from, amount, 0, 0, 0, allowance]
+    dup5                 // [amount, allowance, has_error, allowance_slot, from, amount, 0, 0, 0, allowance]
+    gt                   // [amount > allowance, has_error, allowance_slot, from, amount, 0, 0, 0, allowance]
+    or                   // [has_error', allowance_slot, from, amount, 0, 0, 0, allowance]
+    swap7                // [allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
+    // -- Update allowance.
+    dup4                 // [amount, allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
+    swap1                // [allowance, amount, allowance_slot, from, amount, 0, 0, 0, has_error]
+    sub                  // [allowance', allowance_slot, from, amount, 0, 0, 0, has_error]
+    swap1                // [allowance_slot, allowance', from, amount, 0, 0, 0, has_error]
+    sstore               // [from, amount, 0, 0, 0, has_error]
+
+        _WITHDRAW_FROM_TO_END()
+    withdrawFromTo_inf_allow:
+        //                  [allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
+        pop pop          // [from, amount, 0, 0, 0, has_error]
+        _WITHDRAW_FROM_TO_END()
 }
 
 #define macro _SWEEP_LOG3() = takes(4) returns(0) {
@@ -914,9 +978,9 @@
         __FUNC_SIG(allowance)
         __NON_PAYABLE_SELECTOR_CHECK()
         ALLOWANCE()
-        /* padding (31) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (32) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop
+                           stop stop stop stop
     dest_0xde: __NO_MATCH()
     dest_0xdf: __NO_MATCH()
     dest_0xe0: __NO_MATCH()
