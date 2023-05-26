@@ -1,13 +1,6 @@
 #include "./interfaces/IMETH.huff"
 
 ////////////////////////////////////////////////////////////////
-//                   BASE CONSTANTS                           //
-////////////////////////////////////////////////////////////////
-/// @notice If changed for alternative chain, replace use of `CHAINID` as "push 1" in `permit`.
-#define constant INF_ALLOW_LIM = 0xfeffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-#define constant MAX_ADDR = 0xffffffffffffffffffffffffffffffffffffffff
-
-////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
 ////////////////////////////////////////////////////////////////
 /// @dev Right bit shift that retrieves the unique upper bits of all selectors contained within the ABI.
@@ -38,11 +31,11 @@
 #define macro _NOTA_AND_B() = takes(2) returns(1) {
     // takes:          [a, b]
 
-    // Need (A == 0)  &&  B:
-    //         [=0]   LT  0 -> 0
-    //         [=0]   LT  1 -> 1
-    //         [>0]   LT  0 -> 0
-    //         [>0]   LT  1 -> 0
+    // Need (A == 0)  &&   B:
+    //         [=0]   LT  [0] -> 0
+    //         [=0]   LT  [1] -> 1
+    //         [>0]   LT  [0] -> 0
+    //         [>0]   LT  [1] -> 0
 
     lt              // [!a && b]
     // returns:        [res]
@@ -57,14 +50,9 @@
 
 #define macro _IS_INF() = takes(1) returns(1) {
     // takes:   [allowance]
-    push0    // [0]
+    push0    // [0, allowance]
     byte     // [is_infinite]
     // returns: [is_infinite]
-}
-
-#define macro _REVERT() = takes(1) returns(0) {
-    push0 mstore
-    0x04 0x1c revert
 }
 
 #define macro _RETURN_WORD(word_size) = takes(1) returns(0) {
@@ -77,14 +65,6 @@
     0x1 _RETURN_WORD(<word_size>)
 }
 
-#define macro _BUBBLE_REVERT() = takes(1) returns(0) {
-    // takes:             [success]
-    no_bubble jumpi
-        returndatasize push0 push0 returndatacopy
-        returndatasize push0 revert
-    no_bubble:
-}
-
 #define macro _PUSH_4_ZEROS() = takes(0) returns(4) {
     push0 push0 push0 push0     // [0, 0, 0, 0]
 }
@@ -92,7 +72,14 @@
 #define macro _SEND_ETH() = takes(6) returns(0) {
     // takes:                [recipient, amount, 0, 0, 0, 0]
     gas call              // [success]
-    _BUBBLE_REVERT()      // []
+    no_revert jumpi       // []
+        returndatasize    // [rdz]
+        push0 push0       // [0, 0, rdz]
+        returndatacopy    // []
+        returndatasize    // [rdz]
+        push0             // [0, rdz]
+        revert            // [] -- end
+    no_revert:
     // returns:              []
 }
 

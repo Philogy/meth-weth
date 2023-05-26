@@ -17,7 +17,7 @@ tables = [
         [
             ('`deposit()`', 'Wrap non-zero amount with no existing balance'),
             ('`transfer(...)`', 'Transfer to account with zero balance'),
-            ('receive-fallback', 'Wrap non-zero amount with no existing balance'),
+            ('receive-fallback', 'Wrap non-zero amount with existing balance'),
             (
                 '`approve(...)`',
                 'Grant infinite allowance (requires truncating calldata for METH)'
