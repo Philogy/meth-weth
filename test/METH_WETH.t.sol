@@ -93,7 +93,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         vm.prank(_from);
         vm.expectEmit(true, true, true, true);
         emit Transfer(_from, _to, _transferAmount);
-        assertTrue(meth.transfer(_to, _transferAmount));
+        meth.transfer(_to, _transferAmount);
 
         if (_from != _to) {
             assertEq(meth.balanceOf(_from), _startAmount - _transferAmount, "balance from after");
@@ -142,8 +142,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         vm.prank(operator);
         vm.expectEmit(true, true, true, true);
         emit Transfer(from, to, transferAmount);
-        bool success = meth.transferFrom(from, to, transferAmount);
-        assertTrue(success);
+        meth.transferFrom(from, to, transferAmount);
 
         assertEq(meth.allowance(from, operator), allowance);
 
@@ -178,8 +177,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         vm.prank(_operator);
         vm.expectEmit(true, true, true, true);
         emit Transfer(_from, _to, _transferAmount);
-        bool success = meth.transferFrom(_from, _to, _transferAmount);
-        assertTrue(success);
+        meth.transferFrom(_from, _to, _transferAmount);
 
         assertEq(meth.allowance(_from, _operator), _allowance - _transferAmount);
         if (_from != _to) {

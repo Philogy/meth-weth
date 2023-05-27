@@ -17,11 +17,11 @@ contract BenchmarkScript is Test, Script {
     address internal immutable REC1 = makeAddr("rec1");
 
     function run() public {
-        _runOn(IWETH9(WETH9));
-        _runOn(IWETH9(METH));
+        _runOn(IMETH(WETH9));
+        _runOn(IMETH(METH));
     }
 
-    function _runOn(IWETH9 _weth) internal {
+    function _runOn(IMETH _weth) internal {
         uint256 mainPkey = vm.envUint("PRIV_KEY");
         vm.startBroadcast(mainPkey);
 

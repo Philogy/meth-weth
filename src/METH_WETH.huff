@@ -61,10 +61,6 @@
     <word_size> push0 return // []
 }
 
-#define macro _RETURN_TRUE(word_size) = takes(0) returns(0) {
-    0x1 _RETURN_WORD(<word_size>)
-}
-
 #define macro _PUSH_4_ZEROS() = takes(0) returns(4) {
     push0 push0 push0 push0     // [0, 0, 0, 0]
 }
@@ -114,14 +110,18 @@
 }
 
 #define macro _WITHDRAW_ALL() = takes(0) returns(1) {
-    // takes:                          []
+    // takes:                  []
     // -- Update balance.
-    caller sload                    // [caller.bal]
-    push0 caller sstore             // [caller.bal]
-    // -- Get amount and emit event.
-    caller dup2                     // [amount, caller, amount]
-    _EMIT_WITHDRAWAL(msize)         // [amount]
-    // returns:                        [amount]
+    caller                  // [caller]
+    sload                   // [caller_bal]
+    push0                   // [0, caller_bal]
+    caller                  // [caller, 0, caller_bal]
+    sstore                  // [caller_bal]
+    // -- Emit event.
+    caller                  // [caller, caller_bal]
+    dup2                    // [caller_bal, caller, caller_bal]
+    _EMIT_WITHDRAWAL(msize) // [caller_bal]
+    // returns:                [caller_bal]
 }
 
 // -- External Functions
@@ -162,47 +162,52 @@
     0x10 _LOAD_ADDRESS()  // [to, amount, caller, has_error]
     dup2 caller           // [caller, amount, to, amount, caller, has_error]
     _TRANSFER(msize)      // []
-    _RETURN_TRUE(msize)
+    stop
 }
 
 #define macro _APPROVE() = takes(0) returns(0) {
-    // -- Load & Verify Params
+    // -- Load params.
     0x10 _LOAD_ADDRESS()   // [spender]
     0x24 calldataload      // [amount, spender]
-
-    // -- Store approval
-    caller msize  mstore   // [amount, spender]
-    dup2   msize  mstore   // [amount, spender]
+    // -- Store new allowance.
+    caller                 // [caller, amount, spender]
+    msize                  // [0x00, caller, amount, spender]
+    mstore                 // [amount, spender]
+    dup2                   // [spender, amount, spender]
+    msize                  // [0x20, spender, amount, spender]
+    mstore                 // [amount, spender]
     dup1                   // [amount, amount, spender]
-    0x40 push0 sha3        // [allowance.slot, amount, amount, spender]
+    msize                  // [0x40, amount, amount, spender]
+    push0                  // [0x00, 0x40, amount, amount, spender]
+    sha3                   // [allowance_slot, amount, amount, spender]
     sstore                 // [amount, spender]
-
-    // -- Emit Event
-    push0 mstore           // [spender]
-    caller                 // [owner, spender]
+    // -- Emit event.
+    push0                  // [0x00, amount, spender]
+    mstore                 // [spender]
+    caller                 // [owner (caller), spender]
     __EVENT_HASH(Approval) // [Approval.sig, owner, spender]
-    0x20 push0 log3        // []
+    0x20                   // [0x20, Approval.sig, owner, spender]
+    push0                  // [0x00, 0x20, Approval.sig, owner, spender]
+    log3                   // []
 }
 
 #define macro APPROVE() = takes(0) returns(0) {
     _APPROVE()
-    _RETURN_TRUE(0x20)
+    stop
 }
 
 #define macro ALLOWANCE() = takes(0) returns(0) {
-    0x04 calldataload  // [owner]
-    msize              // [0x00, owner]
+    0x40               // [0x40]
+    0x4                // [4, 0x40]
+    push0              // [0, 4, 0x40]
+    calldatacopy       // []
+    msize              // [0x40]
+    push0              // [0x00, 0x40]
+    sha3               // [allowance_slot]
+    sload              // [allowance]
+    push0              // [0x00, allowance]
     mstore             // []
-    msize              // [0x20]
-    0x24 calldataload  // [spender, 0x20]
-    msize              // [0x20, spender 0x20]
-    mstore             // [0x20]
-    msize              // [0x40, 0x20]
-    push0              // [0x00, 0x40, 0x20]
-    sha3               // [allowance_slot, 0x20]
-    sload              // [allowance, 0x20]
-    push0              // [0x00, allowance, 0x20]
-    mstore             // [0x20]
+    0x20               // [0x20]
     push0              // [0x00, 0x20]
     return             // [] -- end
 }
@@ -212,7 +217,7 @@
     dup2                   // [amount, to, amount, from, has_error]
     dup4                   // [from, amount, to, amount, from, has_error]
     _TRANSFER(0x20)        // []
-    _RETURN_TRUE(0x20)
+    stop
 }
 
 /**
@@ -239,6 +244,13 @@
     // returns:               [allowance, allowance_slot]
 }
 
+#define macro _TRANSFER_FROM_INF_END() = takes(0) returns(0) {
+    transferFrom_inf_allow:
+        //                  [_, _, to, amount, from, has_error]
+        pop pop          // [to, amount, from, has_error]
+        _TRANSFER_FROM_END()
+}
+
 #define macro TRANSFER_FROM() = takes(1) returns(0) {
     // takes:               [has_error]
     0x10 _LOAD_ADDRESS() // [from, has_error]
@@ -248,7 +260,7 @@
     dup3                  // [from, to, amount, from, has_error]
     _GET_ALLOWANCE(transferFrom_inf_allow)
     //                       [allowance, allowance_slot, to, amount, from, has_error]
-    // -- Check sufficient allowance
+    // -- Check sufficient allowance.
     swap5                 // [has_error, allowance_slot, to, amount, from, allowance]
     dup6                  // [allowance, has_error, allowance_slot, to, amount, from, allowance]
     dup5                  // [amount, allowance, has_error, allowance_slot, to, amount, from, allowance]
@@ -261,11 +273,7 @@
     sub                  // [allowance', allowance_slot, to, amount, from, has_error]
     swap1                // [allowance_slot, allowance', to, amount, from, has_error]
     sstore               // [to, amount, from, has_error]
-        _TRANSFER_FROM_END()
-    transferFrom_inf_allow:
-        //                  [to, to, to, amount, from, has_error]
-        pop pop          // [to, amount, from, has_error]
-        _TRANSFER_FROM_END()
+    _TRANSFER_FROM_END()
 }
 
 #define macro _EMIT_DEPOSIT(word_size) = takes(1) returns(0) {
@@ -536,15 +544,6 @@
     push0 calldataload 0xe0 shr
 }
 
-#define macro PAD48() = takes(0) returns(0) {
-    stop stop stop stop stop stop stop stop
-    stop stop stop stop stop stop stop stop
-    stop stop stop stop stop stop stop stop
-    stop stop stop stop stop stop stop stop
-    stop stop stop stop stop stop stop stop
-    stop stop stop stop stop stop stop stop
-}
-
 
 /// @dev Size: 8
 #define macro INVALID_NON_PAYABLE() = takes(2) returns(1) {
@@ -577,34 +576,13 @@
     empty_revert jumpi // []
 }
 
-#define macro __NON_PAYABLE_FUNC_CHECK(selector, final_dest) = takes(1) returns(0) {
-    <selector> eq callvalue lt <final_dest> jumpi
-    push0 push0 revert
-    /*
-    No padding as non-payable check block is exactly 16-bytes large post-compile:
-    JUMPDEST          PUSH4             SELECTOR_BYTE_1   SELECTOR_BYTE_2
-    SELECTOR_BYTE_3   SELECTOR_BYTE_4   EQ                CALLVALUE
-    LT                PUSH2             DEST_BYTE_1       DEST_BYTE_2
-    JUMPI             PUSH0             PUSH0             REVERT
-    */
-
-    PAD48()
-}
-
 #define macro __NO_MATCH() = takes(0) returns(0) {
     push0 push0 revert
-    // Padding to make sure block is 16 bytes large post compilation.
-    stop stop stop stop
-    stop stop stop stop
-    stop stop stop stop
-    /*
-    JUMPDEST          PUSH0             PUSH0             REVERT
-    STOP              STOP              STOP              STOP
-    STOP              STOP              STOP              STOP
-    STOP              STOP              STOP              STOP
-    */
-
-    PAD48()
+    // Padding to make sure block is 64 bytes large post compilation.
+    /* padding (60) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
 }
 
 #define macro __RECEIVE_CHECK() = takes(0) returns(0) {
@@ -621,9 +599,10 @@
     jump                // [selector]
 
     // Padding to make sure jump dests start at the right offset.
-    stop stop
-
-    PAD48()
+    /* padding (50) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                       stop stop stop stop stop
 
     dest_0x00:
         __RECEIVE_CHECK()
@@ -648,10 +627,10 @@
         __NON_PAYABLE_SELECTOR_CHECK()
         APPROVE()
         /// @dev Selectors 0x0a000000 - 0x0affffff will exceptionally revert.
-        /* padding (46) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (54) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop 
+                           stop stop stop stop stop stop stop stop stop stop stop stop
     dest_0x0b: __NO_MATCH()
     dest_0x0c: __NO_MATCH()
     dest_0x0d: __NO_MATCH()
@@ -696,8 +675,9 @@
         __FUNC_SIG(transferFrom)
         INVALID_NON_PAYABLE()
         TRANSFER_FROM()
-        /// @dev Selectors 0x24000000 - 0x25ffffff will exceptionally revert.
-        /* padding (00) */
+        /// @dev Selectors 0x24000000 - 0x24ffffff will exceptionally revert.
+        /* padding (14) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+    dest_0x25: __NO_MATCH()
     dest_0x26: __NO_MATCH()
     dest_0x27: __NO_MATCH()
     dest_0x28:
@@ -706,7 +686,7 @@
         __NON_PAYABLE_SELECTOR_CHECK()
         DEPOSIT_AND_APPROVE()
         /// @dev Selectors 0x29000000 - 0x29ffffff will exceptionally revert.
-        /* padding (07) */ stop stop stop stop stop stop stop
+        /* padding (08) */ stop stop stop stop stop stop stop stop
     dest_0x2a: __NO_MATCH()
     dest_0x2b: __NO_MATCH()
     dest_0x2c: __NO_MATCH()
@@ -754,10 +734,16 @@
     dest_0x47: __NO_MATCH()
     dest_0x48: __NO_MATCH()
     dest_0x49: __NO_MATCH()
-    dest_0x4a: __NON_PAYABLE_FUNC_CHECK(0x4a4089cc, withdrawFromTo_final_dest)
-    dest_0x4b: __NO_MATCH()
-    dest_0x4c: __NO_MATCH()
-    dest_0x4d: __NO_MATCH()
+    dest_0x4a:
+        // 0x4a4089cc
+        __FUNC_SIG(withdrawFromTo)
+        INVALID_NON_PAYABLE()
+        WITHDRAW_FROM_TO()
+        /// @dev Selectors 0x4b000000 - 0x4dffffff will exceptionally revert.
+        /* padding (53) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop
     dest_0x4e: __NO_MATCH()
     dest_0x4f: __NO_MATCH()
     dest_0x50: __NO_MATCH()
@@ -882,10 +868,10 @@
         INVALID_NON_PAYABLE()
         TRANSFER()
         /// @dev Selectors 0xaa000000 - 0xaaffffff will exceptionally revert.
-        /* padding (43) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (49) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop
+                           stop stop stop stop stop stop stop
     dest_0xab: __NO_MATCH()
     dest_0xac: __NO_MATCH()
     dest_0xad:
@@ -1003,11 +989,8 @@
     dest_0xfe: __NO_MATCH()
     dest_0xff: __NO_MATCH()
 
+    _TRANSFER_FROM_INF_END()
     _WITHDRAW_FROM_END()
-
-    withdrawFromTo_final_dest:
-        // WITHDRAW_FROM_TO()
-        stop
 
     empty_revert:
         push0 push0 revert

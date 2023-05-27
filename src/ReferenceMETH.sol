@@ -23,21 +23,18 @@ contract ReferenceMETH is IMETH {
         return address(this).balance;
     }
 
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external {
         _transfer(msg.sender, to, amount);
-        return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) external {
         _useAllowance(from, amount);
         _transfer(from, to, amount);
-        return true;
     }
 
-    function approve(address spender, uint256 amount) public returns (bool) {
+    function approve(address spender, uint256 amount) public {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
-        return true;
     }
 
     receive() external payable {
