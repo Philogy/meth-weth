@@ -10,16 +10,16 @@ contract METHSymbolicTest is Test, METHCode {
     function proveTransfer(address from, address to, address other, uint256 amount) public {
         IMETH meth = _deployMETH();
 
-        vm.store(
-            address(meth),
-            bytes32(uint256(0xacab)),
-            bytes32(0x800000000000000000003ffffffffffff8000000000007e00100000000000083)
-        );
-        vm.store(
-            address(meth),
-            bytes32(uint256(0x00a0008000000003000001db3bf7e6000000000000)),
-            bytes32(0x7c00000000000000000000000000000003fffffffffffdafffbfffffffffffff)
-        );
+        // vm.store(
+        //     address(meth),
+        //     bytes32(uint256(0xacab)),
+        //     bytes32(0x800000000000000000003ffffffffffff8000000000007e00100000000000083)
+        // );
+        // vm.store(
+        //     address(meth),
+        //     bytes32(uint256(0x00a0008000000003000001db3bf7e6000000000000)),
+        //     bytes32(0x7c00000000000000000000000000000003fffffffffffdafffbfffffffffffff)
+        // );
 
         // Assumption: `other` is not one of the two addresses.
         require(other != from && other != to);
@@ -60,13 +60,3 @@ contract METHSymbolicTest is Test, METHCode {
         return type(uint256).max - x >= y;
     }
 }
-/*
-0x
-6b5c6370
-000000000000000000000000 0xa0008000000003000001db3bf7e6000000000000
-000000000000000000000000 0xa0008000000003000001db3bf7e6000000000000
-000000000000000000000000 0x5fff3ffffffffcfffffe24c40819ffffffffffff
-07fffffffffffffffffffffffffffffff8000000000004a00080000000000001
-
-
-    */
