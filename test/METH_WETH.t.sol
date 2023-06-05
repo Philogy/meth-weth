@@ -6,6 +6,11 @@ import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 import {METHConstants} from "src/METHConstants.sol";
 
+interface ShanghaiChecker {
+    function shanghaiEnabled() external view returns (bool);
+    function usePush0() external view;
+}
+
 /// @author philogy <https://github.com/philogy>
 contract METH_WETHTest is Test, METHBaseTest {
     event Approval(address indexed owner, address indexed spender, uint256 amount);
@@ -248,6 +253,60 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(meth.allowance(owner, operator), allowance);
     }
 
+    function testUnimplementedReverts() public {
+        uint32[] memory exceptionalSelectors = new uint32[](10);
+        exceptionalSelectors[0] = 0x0a000000;
+        exceptionalSelectors[1] = 0x21000000;
+        exceptionalSelectors[2] = 0x24000000;
+        exceptionalSelectors[3] = 0x29000000;
+        exceptionalSelectors[4] = 0x2f000000;
+        exceptionalSelectors[5] = 0x4b000000;
+        exceptionalSelectors[6] = 0x86000000;
+        exceptionalSelectors[7] = 0xaa000000;
+        exceptionalSelectors[8] = 0xae000000;
+        exceptionalSelectors[9] = 0xcb000000;
+
+        for (uint256 i = 0; i < exceptionalSelectors.length; i++) {
+            uint32 selector = exceptionalSelectors[i];
+            uint256 jumpDest = (selector >> 0x12) | 0x3f;
+
+            assertTrue(address(meth).code[jumpDest] != 0x5b);
+        }
+
+        address meth_ = address(meth);
+        uint256 maxGas = 100_000;
+
+        for (uint256 i = 0; i < 256; i++) {
+            uint32 selector = uint32(i << 24);
+            bool isExceptional = false;
+            for (uint256 j = 0; j < exceptionalSelectors.length; j++) {
+                if (selector == exceptionalSelectors[j]) {
+                    isExceptional = true;
+                    break;
+                }
+            }
+
+            uint256 gasChange;
+            bool success;
+            assembly {
+                mstore(0x00, selector)
+                let gasBefore := gas()
+                success := call(maxGas, meth_, 0, 0x1c, 0x04, 0x00, 0x00)
+                gasChange := sub(gasBefore, gas())
+            }
+
+            if (isExceptional) {
+                assertGt(gasChange, maxGas);
+            } else {
+                // Some methods will cheaply revert immediately, others like `transferFrom` will
+                // only revert once the first bundled check is reached.
+                assertLt(gasChange, 5000);
+            }
+
+            assertFalse(success, "Unimplemented selector should've reverted");
+        }
+    }
+
     function testRecovery() public {
         address user = vm.addr(1);
         vm.deal(user, 3 ether);
@@ -291,6 +350,12 @@ contract METH_WETHTest is Test, METHBaseTest {
 
     function test_fuzzingDefaultAllowance(address owner, address spender) public {
         assertEq(meth.allowance(owner, spender), 0);
+    }
+
+    function testShanghai() public {
+        ShanghaiChecker checker = ShanghaiChecker((new HuffDeployer()).deploy("src/utils/ShanghaiChecker.huff"));
+
+        assertTrue(checker.shanghaiEnabled());
     }
 
     function _loadWord(bytes memory _bytes, uint256 _offset) internal pure returns (uint256 word) {
