@@ -10,17 +10,6 @@ contract METHSymbolicTest is Test, METHCode {
     function proveTransfer(address from, address to, address other, uint256 amount) public {
         IMETH meth = _deployMETH();
 
-        // vm.store(
-        //     address(meth),
-        //     bytes32(uint256(0xacab)),
-        //     bytes32(0x800000000000000000000ffffffffffff8000080000a04000000000000000000)
-        // );
-        // vm.store(
-        //     address(meth),
-        //     bytes32(uint256(0x0004002000200003009003ee7b9f02000000000000)),
-        //     bytes32(0x7c00000000000000000000000000000003ffffbffffaffb7f33fffffffffff47)
-        // );
-
         uint256 fromBalBefore = meth.balanceOf(from);
         uint256 toBalBefore = meth.balanceOf(to);
         uint256 otherBalBefore = meth.balanceOf(other);
@@ -51,8 +40,8 @@ contract METHSymbolicTest is Test, METHCode {
             unchecked {
                 assert(toBalBefore + amount == meth.balanceOf(to));
             }
-            // Invariant (implicit sanity check): Recipients balance cannot be overflowing
-            assert(type(uint256).max - toBalBefore >= amount);
+            // Invariant (implicit, sanity check): Recipient's balance cannot be overflowing
+            assert(noOverflow(toBalBefore, amount));
         }
 
         // Invariant: Transfers between A and B should not affect the balance of accounts C ∉ {A, B}
