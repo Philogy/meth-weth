@@ -8,22 +8,17 @@
 #define constant S_COVER = 0x3f // 63 (111111_2)
 
 ////////////////////////////////////////////////////////////////
-//                 METADATA CONSTANTS                         //
-////////////////////////////////////////////////////////////////
+//                 METADATA CONSTANTS                         // //////////////////////////////////////////////////////////////
 // ================== Decimals ===================
-/// @dev METH has 18 decimals meaning a balance of `1120000000000000000` should be displayed as `1.12`.
+/// @dev METH has 18 decimals meaning a balance of `1150100000000000000` should be displayed as `1.1501`.
 #define constant METH_DECIMALS = 0x12
 // ==================== Name =====================
-// name.length ++ "M"
-#define constant PACKED_NAME_1        = 0x214d
-#define constant PACKED_NAME_OFFSET_1 = 0x21
-// "aximally Efficient Wrapped Ether"
-#define constant PACKED_NAME_2        = 0x6178696d616c6c7920456666696369656e742057726170706564204574686572
-#define constant PACKED_NAME_OFFSET_2 = 0x41
+#define table NAME_DATA {
+    0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000214d6178696d616c6c7920456666696369656e74205772617070656420457468657200000000000000000000000000000000000000000000000000000000000000
+}
 // =================== Symbol ====================
 // symbol.length ++ "METH"
-#define constant PACKED_SYMBOL_1 = 0x044d455448
-#define constant PACKED_SYMBOL_OFFSET_1 = 0x24
+#define constant PACKED_SYMBOL = 0x044d455448000000000000000000000000000000000000000000000000000000
 
 /// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and this addresses.
 #define constant LOST_N_FOUND = 0x1212121212121212121212121212121212121212
@@ -70,20 +65,21 @@
     gas call              // [success]
     no_revert jumpi       // []
         returndatasize    // [rdz]
-        push0 push0       // [0, 0, rdz]
-        returndatacopy    // []
-        returndatasize    // [rdz]
         push0             // [0, rdz]
+        returndatasize    // [rdz, 0, rdz]
+        push0 push0       // [0, 0, rdz, 0, rdz]
+        returndatacopy    // [0, rdz]
         revert            // [] -- end
-    no_revert:
-    // returns:              []
+    no_revert:            // []
+    // Stop in `_SEND_ETH` macro to ensure CEI.
+        stop              // [] -- end
 }
 
 #define macro _EMIT_TRANSFER(word_size) = takes(3) returns(0) {
     // takes:                 [amount, from, to]
     push0 mstore           // [from, to]
     __EVENT_HASH(Transfer) // [Transfer.sig, from, to]
-    <word_size> push0 log3
+    <word_size> push0 log3 // []
 }
 
 #define macro _TRANSFER(word_size) = takes(6) returns(0) {
@@ -127,18 +123,19 @@
 // -- External Functions
 // ---- Metadata / Global Methods
 #define macro NAME() = takes(0) returns(0) {
-    // Store string offset.
-    0x20            push0                mstore
-    // Write packed string data to memory, including length.
-    [PACKED_NAME_1] [PACKED_NAME_OFFSET_1] mstore
-    [PACKED_NAME_2] [PACKED_NAME_OFFSET_2] mstore
-    msize           push0                 return
+    __tablesize(NAME_DATA)  // [name_data_len]
+    __tablestart(NAME_DATA) // [name_data_offset, name_data_len]
+    push0                   // [0, name_data_offset, name_data_len]
+    codecopy                // []
+    msize                   // [mem_size]
+    push0                   // [0, mem_size]
+    return                  // [] -- end
 }
 
 #define macro SYMBOL() = takes(0) returns(0) {
-    0x20              push0                    mstore
-    [PACKED_SYMBOL_1] [PACKED_SYMBOL_OFFSET_1] mstore
-    msize             push0                    return
+    0x20              push0   mstore
+    [PACKED_SYMBOL]   0x3f    mstore
+    msize             push0   return
 }
 
 #define macro DECIMALS() = takes(0) returns(0) {
@@ -278,17 +275,24 @@
 
 #define macro _EMIT_DEPOSIT(word_size) = takes(1) returns(0) {
     // takes:                 [to]
-    callvalue push0 mstore // [to]
+    callvalue              // [callvalue, to]
+    push0                  // [0, callvalue, to]
+    mstore                 // [to]
     __EVENT_HASH(Deposit)  // [Deposit.sig, to]
-    <word_size> push0 log2 // []
+    <word_size>            // [0x20, Deposit.sig, to]
+    push0                  // [0x00, 0x20, Deposit.sig, to]
+    log2                   // []
 }
 
 #define macro _DEPOSIT() = takes(0) returns(0) {
-    caller sload            // [caller.bal]
-    // Would need 3.4 x 10^20 ETH to overflow into nonce.
-    callvalue add           // [caller.bal']
-    caller sstore           // []
-    caller _EMIT_DEPOSIT(msize)
+    caller               // [caller]
+    sload                // [caller_bal]
+    callvalue            // [callvalue]
+    add                  // [caller_bal']
+    caller               // [caller]
+    sstore               // []
+    caller               // [caller]
+    _EMIT_DEPOSIT(msize) // []
 }
 
 #define macro DEPOSIT() = takes(0) returns(0) {
@@ -348,7 +352,6 @@
     _BURN_FROM_CALLER() // [amount, 0, 0, 0, 0]
     caller              // [caller, amount, 0, 0, 0, 0]
     _SEND_ETH()         // []
-    stop
 }
 
 #define macro WITHDRAW_TO() = takes(1) returns(0) {
@@ -358,7 +361,6 @@
     _BURN_FROM_CALLER()     // [amount, 0, 0, 0, 0]
     0x04 calldataload       // [to, amount, 0, 0, 0, 0]
     _SEND_ETH()             // []
-    stop
 }
 
 #define macro WITHDRAW_ALL() = takes(0) returns(0) {
@@ -369,7 +371,6 @@
     // -- Transfer ETH.
     caller          // [caller, amount, 0, 0, 0, 0]
     _SEND_ETH()     // []
-    stop
 }
 
 #define macro WITHDRAW_ALL_TO() = takes(0) returns(0) {
@@ -380,7 +381,6 @@
     // -- Transfer ETH.
     0x04 calldataload   // [to, amount, 0, 0, 0, 0]
     _SEND_ETH()         // []
-    stop
 }
 
 #define macro _WITHDRAW_FROM_BAL_CHECK() = takes(6) returns(0) {
@@ -442,32 +442,35 @@
         //                  [amount, 0, 0, 0, 0]
         caller           // [caller, amount, 0, 0, 0, 0]
         _SEND_ETH()      // []
-        stop
 }
 
 #define macro _WITHDRAW_FROM_TO_END() = takes(6) returns(0) {
-    // takes:               [from, amount, 0, 0, 0, has_error]
-    dup1                 // [from, from, amount, 0, 0, 0, has_error]
-    sload                // [from_bal, from, amount, 0, 0, 0, has_error]
-    swap6                // [has_error, from, amount, 0, 0, 0, from_bal]
-    dup7                 // [from_bal, has_error, from, amount, 0, 0, 0, from_bal]
-    dup4                 // [amount, from_bal, has_error, from, amount, 0, 0, 0, from_bal]
-    gt                   // [amount > from_bal, has_error, from, amount, 0, 0, 0, from_bal]
-    or                   // [has_error', from, amount, 0, 0, 0, from_bal]
-    empty_revert jumpi   // [from, amount, 0, 0, 0, from_bal]
+    // takes:                 [from, amount, 0, 0, 0, has_error]
+    dup1                   // [from, from, amount, 0, 0, 0, has_error]
+    sload                  // [from_bal, from, amount, 0, 0, 0, has_error]
+    swap6                  // [has_error, from, amount, 0, 0, 0, from_bal]
+    dup7                   // [from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    dup4                   // [amount, from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    gt                     // [amount > from_bal, has_error, from, amount, 0, 0, 0, from_bal]
+    or                     // [has_error', from, amount, 0, 0, 0, from_bal]
+    empty_revert jumpi     // [from, amount, 0, 0, 0, from_bal]
+    dup2                   // [amount, from, amount, 0, 0, 0, from_bal]
+    push0                  // [0, amount, from, amount, 0, 0, 0, from_bal]
+    swap7                  // [from_bal, amount, from, amount, 0, 0, 0, 0]
+    sub                    // [from_bal', from, amount, 0, 0, 0, 0]
+    dup2                   // [from, from_bal', from, amount, 0, 0, 0, 0]
+    sstore                 // [from, amount, 0, 0, 0, 0]
+    dup2                   // [amount, from, amount, 0, 0, 0, 0]
+    _EMIT_WITHDRAWAL(0x20) // [amount, 0, 0, 0, 0]
+    0x24 calldataload      // [to, amount, 0, 0, 0, 0]
+    _SEND_ETH()            // []
+}
 
-    dup2                 // [amount, from, amount, 0, 0, 0, from_bal]
-    push0                // [0, amount, from, amount, 0, 0, 0, from_bal]
-    swap7                // [from_bal, amount, from, amount, 0, 0, 0, 0]
-    sub                  // [from_bal', from, amount, 0, 0, 0, 0]
-    dup2                 // [from, from_bal', from, amount, 0, 0, 0, 0]
-    sstore               // [from, amount, 0, 0, 0, 0]
-    dup2                 // [amount, from, amount, 0, 0, 0, 0]
-    _EMIT_WITHDRAWAL(0x20)
-    //                      [amount, 0, 0, 0, 0]
-    0x24 calldataload    // [to, amount, 0, 0, 0, 0]
-    _SEND_ETH()          // []
-    stop
+#define macro _WITHDRAW_FROM_TO_INF_END() = takes(7) returns(0) {
+    withdrawFromTo_inf_allow:
+        //                  [allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
+        pop pop          // [from, amount, 0, 0, 0, has_error]
+        _WITHDRAW_FROM_TO_END()
 }
 
 #define macro WITHDRAW_FROM_TO() = takes(1) returns(0) {
@@ -493,12 +496,7 @@
     sub                  // [allowance', allowance_slot, from, amount, 0, 0, 0, has_error]
     swap1                // [allowance_slot, allowance', from, amount, 0, 0, 0, has_error]
     sstore               // [from, amount, 0, 0, 0, has_error]
-
-        _WITHDRAW_FROM_TO_END()
-    withdrawFromTo_inf_allow:
-        //                  [allowance, allowance_slot, from, amount, 0, 0, 0, has_error]
-        pop pop          // [from, amount, 0, 0, 0, has_error]
-        _WITHDRAW_FROM_TO_END()
+    _WITHDRAW_FROM_TO_END()
 }
 
 #define macro _SWEEP_LOG3() = takes(4) returns(0) {
@@ -618,7 +616,9 @@
         __FUNC_SIG(name)
         __NON_PAYABLE_SELECTOR_CHECK()
         NAME()
-        /* padding (02) */ stop stop
+        /* padding (41) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop
     dest_0x07f: __NO_MATCH()
     dest_0x08f: __NO_MATCH()
     dest_0x09f:
@@ -668,7 +668,7 @@
         /// @dev Selectors 0x21000000 - 0x21ffffff will exceptionally revert.
         /* padding (39) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop 
+                           stop stop stop stop stop stop stop stop stop stop stop
     dest_0x22: __NO_MATCH()
     dest_0x23:
         // 0x23b872dd
@@ -739,11 +739,10 @@
         __FUNC_SIG(withdrawFromTo)
         INVALID_NON_PAYABLE()
         WITHDRAW_FROM_TO()
-        /// @dev Selectors 0x4b000000 - 0x4dffffff will exceptionally revert.
-        /* padding (53) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop
+        /// @dev Selectors 0x4b000000 - 0x4bffffff will exceptionally revert.
+        /* padding (03) */ stop stop stop
+    dest_0x4c: __NO_MATCH()
+    dest_0x4d: __NO_MATCH()
     dest_0x4e: __NO_MATCH()
     dest_0x4f: __NO_MATCH()
     dest_0x50: __NO_MATCH()
@@ -840,9 +839,7 @@
         __FUNC_SIG(symbol)
         __NON_PAYABLE_SELECTOR_CHECK()
         SYMBOL()
-        /* padding (35) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop
+        /* padding (08) */ stop stop stop stop stop stop stop stop
     dest_0x96: __NO_MATCH()
     dest_0x97: __NO_MATCH()
     dest_0x98: __NO_MATCH()
@@ -951,9 +948,9 @@
         __FUNC_SIG(allowance)
         __NON_PAYABLE_SELECTOR_CHECK()
         ALLOWANCE()
-        /* padding (32) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (35) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop
+                           stop stop stop stop stop stop stop
     dest_0xde: __NO_MATCH()
     dest_0xdf: __NO_MATCH()
     dest_0xe0: __NO_MATCH()
@@ -987,11 +984,9 @@
     dest_0xfc: __NO_MATCH()
     dest_0xfd: __NO_MATCH()
     dest_0xfe: __NO_MATCH()
-    dest_0xff: __NO_MATCH()
+    empty_revert: push0 push0 revert
 
     _TRANSFER_FROM_INF_END()
     _WITHDRAW_FROM_END()
-
-    empty_revert:
-        push0 push0 revert
+    _WITHDRAW_FROM_TO_INF_END()
 }
