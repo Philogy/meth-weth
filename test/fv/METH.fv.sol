@@ -13,30 +13,33 @@ contract METHSymbolicTest is Test, METHCode {
         // vm.store(
         //     address(meth),
         //     bytes32(uint256(0xacab)),
-        //     bytes32(0x800000000000000000003ffffffffffff8000000000007e00100000000000083)
+        //     bytes32(0x800000000000000000000ffffffffffff8000080000a04000000000000000000)
         // );
         // vm.store(
         //     address(meth),
-        //     bytes32(uint256(0x00a0008000000003000001db3bf7e6000000000000)),
-        //     bytes32(0x7c00000000000000000000000000000003fffffffffffdafffbfffffffffffff)
+        //     bytes32(uint256(0x0004002000200003009003ee7b9f02000000000000)),
+        //     bytes32(0x7c00000000000000000000000000000003ffffbffffaffb7f33fffffffffff47)
         // );
-
-        // Assumption: `other` is not one of the two addresses.
-        require(other != from && other != to);
-        uint256 otherBalBefore = meth.balanceOf(other);
 
         uint256 fromBalBefore = meth.balanceOf(from);
         uint256 toBalBefore = meth.balanceOf(to);
+        uint256 otherBalBefore = meth.balanceOf(other);
 
-        // Assumption: If not self-sending, bal(from) + bal(to) do not overflow 1 EVM word (2**256 - 1)
+        /**
+         * @dev Assumption: Can never reach a state where bal(from) + bal(to) could overflow a uint256 (if from != to).
+         * - Assuming the total supply of ETH does not exceed 2^256 - 1 (currently ~2^90)
+         * - *AND* The solvency invariant (sum(balances) == total_eth_deposited) has been upheld till now
+         * => The sum of the balance of two different accounts A & B cannot overflow:
+         *          2**256 > total_eth_suply >= total_eth_deposited == sum(balances) >= bal(A) + bal(B)
+         */
         if (from != to) {
-            require(fromBalBefore <= type(uint256).max - toBalBefore);
+            require(noOverflow(fromBalBefore, toBalBefore));
         }
 
         vm.prank(from);
         meth.transfer(to, amount);
 
-        // Invariant: For transfer not to revert must have sufficient balance.
+        // Invariant: For transfer not to revert must have had sufficient balance.
         assert(fromBalBefore >= amount);
 
         if (from == to) {
@@ -52,7 +55,8 @@ contract METHSymbolicTest is Test, METHCode {
             assert(type(uint256).max - toBalBefore >= amount);
         }
 
-        // Invariant: Transfer between account `x` and `y` should not affect balance of account `z`.
+        // Invariant: Transfers between A and B should not affect the balance of accounts C ∉ {A, B}
+        require(other != from && other != to);
         assert(meth.balanceOf(other) == otherBalBefore);
     }
 
