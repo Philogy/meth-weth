@@ -6,8 +6,9 @@ import {METHConstants} from "./METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
+    struct Value {
+        uint256 value;
+    }
 
     address internal immutable recovery;
 
@@ -17,10 +18,6 @@ contract ReferenceMETH is IMETH {
 
     constructor(address recovery_) {
         recovery = recovery_;
-    }
-
-    function totalSupply() external view returns (uint256) {
-        return address(this).balance;
     }
 
     function transfer(address to, uint256 amount) external {
@@ -33,7 +30,7 @@ contract ReferenceMETH is IMETH {
     }
 
     function approve(address spender, uint256 amount) public {
-        allowance[msg.sender][spender] = amount;
+        _allowance(msg.sender, spender).value = amount;
         emit Approval(msg.sender, spender, amount);
     }
 
@@ -42,13 +39,13 @@ contract ReferenceMETH is IMETH {
     }
 
     function deposit() public payable {
-        balanceOf[msg.sender] += msg.value;
+        _balanceOf(msg.sender).value += msg.value;
         emit Deposit(msg.sender, msg.value);
     }
 
     function depositTo(address to) external payable {
         unchecked {
-            balanceOf[to] += msg.value;
+            _balanceOf(to).value += msg.value;
         }
         emit Deposit(to, msg.value);
     }
@@ -59,13 +56,13 @@ contract ReferenceMETH is IMETH {
     }
 
     function withdrawAll() external {
-        uint256 amount = balanceOf[msg.sender];
+        uint256 amount = _balanceOf(msg.sender).value;
         _withdraw(msg.sender, amount);
         _sendEth(msg.sender, amount);
     }
 
     function withdrawAllTo(address to) external {
-        uint256 amount = balanceOf[msg.sender];
+        uint256 amount = _balanceOf(msg.sender).value;
         _withdraw(msg.sender, amount);
         _sendEth(to, amount);
     }
@@ -93,36 +90,50 @@ contract ReferenceMETH is IMETH {
     }
 
     function sweepLost() external {
-        uint256 zeroBal = balanceOf[address(0)];
-        uint256 thisBal = balanceOf[address(this)];
+        uint256 zeroBal = _balanceOf(address(0)).value;
+        uint256 thisBal = _balanceOf(address(this)).value;
         emit Transfer(address(0), recovery, zeroBal);
         emit Transfer(address(this), recovery, thisBal);
-        balanceOf[address(0)] = 0;
-        balanceOf[address(this)] = 0;
+        _balanceOf(address(0)).value = 0;
+        _balanceOf(address(this)).value = 0;
         unchecked {
-            balanceOf[recovery] += zeroBal + thisBal;
+            _balanceOf(recovery).value += zeroBal + thisBal;
         }
     }
 
+    function totalSupply() external view returns (uint256) {
+        return address(this).balance;
+    }
+
+    function balanceOf(address acc) external view returns (uint256) {
+        return _balanceOf(acc).value;
+    }
+
+    function allowance(address owner, address spender) external view returns (uint256) {
+        return _allowance(owner, spender).value;
+    }
+
     function _transfer(address from, address to, uint256 amount) internal {
-        require(balanceOf[from] >= amount);
-        balanceOf[from] -= amount;
-        balanceOf[to] += amount;
+        require(_balanceOf(from).value >= amount);
+        unchecked {
+            _balanceOf(from).value -= amount;
+            _balanceOf(to).value += amount;
+        }
         emit Transfer(from, to, amount);
     }
 
     function _useAllowance(address owner, uint256 amount) internal {
-        if (allowance[owner][msg.sender] < METHConstants.MIN_INF_ALLOWANCE) {
-            require(allowance[owner][msg.sender] >= amount);
-            allowance[owner][msg.sender] -= amount;
+        if (_allowance(owner, msg.sender).value < METHConstants.MIN_INF_ALLOWANCE) {
+            require(_allowance(owner, msg.sender).value >= amount);
+            _allowance(owner, msg.sender).value -= amount;
         }
     }
 
     function _withdraw(address from, uint256 amount) internal {
-        uint256 bal = balanceOf[from];
+        uint256 bal = _balanceOf(from).value;
         require(bal >= amount);
         unchecked {
-            balanceOf[from] = bal - amount;
+            _balanceOf(from).value = bal - amount;
         }
         emit Withdrawal(from, amount);
     }
@@ -134,6 +145,20 @@ contract ReferenceMETH is IMETH {
                 returndatacopy(0x00, 0x00, returndatasize())
                 revert(0x00, returndatasize())
             }
+        }
+    }
+
+    function _balanceOf(address acc) internal pure returns (Value storage value) {
+        assembly {
+            value.slot := acc
+        }
+    }
+
+    function _allowance(address owner, address spender) internal pure returns (Value storage value) {
+        assembly {
+            mstore(0x00, owner)
+            mstore(0x20, spender)
+            value.slot := keccak256(0x00, 0x40)
         }
     }
 }
