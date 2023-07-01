@@ -1,6 +1,6 @@
 # METH
 
-> A Wrapped Ether implementation so efficient it'll make your teeth fall out
+> A Wrapped Ether implementation so efficient it'll make your teeth fall out 🦷
 
 "METH" is an overall better version of the commonly used [WETH9](https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) contract,
 providing a trustless, immutable and standardized way for smart contracts to abstract away the
@@ -127,7 +127,7 @@ variables. Certain methods also allow contracts to avoid otherwise unused `recei
   ```
 
 ### ⚡ Highly Optimized
-_METH_ is written directly in bytecode-level assembly using the [Huff](https://huff.sh) langauge, ensuring it's implementation is as efficient
+_METH_ is written directly in bytecode-level assembly using the [Huff](https://huff.sh) language, ensuring its implementation is as efficient
 as possible.
 
 ## ⚙️ "METH" under the hood
@@ -150,7 +150,7 @@ METH uses a constant gas function dispatcher that jumps to any function in its A
 
 Step gas cost|Cumulative gas cost|Op-Code |Stack|Explanation
 -------------|---------------|------------------|-----|----------------
-2|2|PC|[`0`]|Push 0 using 2 instead of 3 gas
+2|2|PUSH0|[`0`]|Push 0 using 2 gas ([EIP-3855](https://eips.ethereum.org/EIPS/eip-3855) included in the Shangai upgrade)
 3|5|CALLDATALOAD|[`calldata[0:32]`]|Load calldata (including selector)
 3|8|PUSH1 0xE0|[`0xe0 (224)`; `calldata[0:32]`]|Push selector offset
 3|11|SHR|[`selector`]|Bitshift right to get 4 upper most bytes of calldata i.e. selector
