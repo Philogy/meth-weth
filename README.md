@@ -57,6 +57,21 @@ Calling methods that are not implemented will not silently pass, if you need to 
 either send it directly with no calldata or use one of the `deposit` methods. Calling an
 unimplemented function _may_ consume all gas sent to the contract.
 
+Following (unimplemented) selectors will lead to an exceptional revert, consuming all gas when
+called:
+```
+0x0a000000 - 0x0affffff 
+0x21000000 - 0x21ffffff 
+0x24000000 - 0x24ffffff 
+0x29000000 - 0x29ffffff 
+0x2f000000 - 0x2fffffff 
+0x4b000000 - 0x4bffffff 
+0x86000000 - 0x86ffffff 
+0xaa000000 - 0xaaffffff 
+0xae000000 - 0xaeffffff 
+0xcb000000 - 0xcbffffff 
+```
+
 ### 👤 Improved UX
 
 
@@ -131,12 +146,7 @@ unsusable WETH by finding an allowance slot with 12 leading zero bytes (96-bit b
 details on the implications of this view the [Security doc](./SECURITY.md).
 
 ### Function Dispatcher
-METH uses a constant gas function dispatcher that dispatches any function in its ABI in only 55-gas,
-the `receive` fallback function is dispatched in 54 gas. This is done by extracting unique bits from
-the selector, interpreting it as a jump destination and then doing a single direct selector
-comparison to ensure collisions are excluded.
-
-A breakdown of the function dispatcher is done here:
+METH uses a constant gas function dispatcher that jumps to any function in its ABI in only 34-gas:
 
 Step gas cost|Cumulative gas cost|Op-Code |Stack|Explanation
 -------------|---------------|------------------|-----|----------------
@@ -145,21 +155,27 @@ Step gas cost|Cumulative gas cost|Op-Code |Stack|Explanation
 3|8|PUSH1 0xE0|[`0xe0 (224)`; `calldata[0:32]`]|Push selector offset
 3|11|SHR|[`selector`]|Bitshift right to get 4 upper most bytes of calldata i.e. selector
 3|14|DUP1|[`selector`; `selector`]|Duplicate selector on stack for jump table
-3|17|PUSH1 0x14|[`0x14 (20)`, `selector`; `selector`]|Push unique selector bits offset
-3|20|SHR|[`unique_bits`; `selector`]|Bitshift right to get the 12 uppermost bits of the selector
-3|23|PUSH1 0x0F|[`0xf (0b1111)`; `unique_bits`; `selector`]|Push lower bit mask
+3|17|PUSH1 0x12|[`0x12 (18)`, `selector`; `selector`]|Push unique selector bits offset
+3|20|SHR|[`unique_bits`; `selector`]|Bitshift right to get the 14 uppermost bits of the selector
+3|23|PUSH1 0x3F|[`0x3f (0b111111)`; `unique_bits`; `selector`]|Push lower bit mask
 3|26|OR|[`jump_destination`; `selector`]|Masks lower bits to ensure there's sufficient space between destinations
-8|34|JUMP|[`selector`]|Jump to selector's check.
-1|35|JUMPDEST|[`selector`]|Destination (256 to cover full selector range)
-3|38|PUSH4 `<expected_selector>`|[`expected_selector`, `selector`]|Push expected selector for the final comparison
-3|41|EQ|[`selector_matches`]|Check selector (necessary to rule out collision between different selector with same top bits)
-3|44|PUSH2 `final_dest`|[`final_dest`; `selector_matches`]|Push destination of actual function logic
-10|54|JUMPI|[]|Do the final jump if selectors matched. Will continue to a revert if comparison failed
-1|55|JUMPDEST|[]|Destination of actual function code
+8|34|JUMP|[`selector`]|Jump to function.
 
-The final check is slightly modified for the destination of the `receive()` fallback function.
-Instead of `PUSH4 <expected_selector> EQ` it does `CALLDATASIZE ISZERO` costing one less gas.
-Retrieving the selector (`PC CALLDATALOAD PUSh1 0xE0 SHR`) will still work for a call with no calldata as `CALLDATALOAD` reverts to
-pushing 0 for out-of-bounds calldata. 
+Each function verifies whether the selector matches its function selector as whole, this is done to
+ensure that the contract actually reverts if it's called with a selector where the identifying
+8-bits match with an existing function but the full selector does not e.g. (from `name()`):
 
-If no selector in the ABI has a certain uppermost byte.
+Step gas cost|Cumulative gas cost|Op-Code |Stack|Explanation
+-------------|---------------|------------------|-----|----------------
+1|1|JUMPDEST|[`selector`]|"Landing pad" of function from dispatcher
+3|4|PUSH4 0x06fdde03|[`name.selector`, `selector`]|Pushes expected selector to stack
+3|7|SUB|[`selector_diff`]|Use subtraction operator as inequality check
+2|9|CALLVALUE|[`msg.value`, `selector_diff`]|Push `msg.value`
+3|12|OR|[`invalid_call`]|Bitwise OR results in non-zero value if either selector didn't match or ETH was sent
+3|15|PUSH2 0x40e1|[`revert_dest`, `invalid_call`]|Pushes revert destination to stack
+10|25|JUMPI|[]|Jumps to a revert if `invalid_call` is non-zero
+
+Due to the cost of the `JUMPI` opcode some functions that have more conditions defer the actual 
+branching instruction until it can bundle together the check of multiple conditions e.g.
+`withdraw(uint)` uses only 1 `JUMPI` to check both the selector and that the caller has sufficient
+balance.
