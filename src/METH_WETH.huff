@@ -154,6 +154,7 @@
 }
 
 #define macro TRANSFER() = takes(1) returns(0) {
+    // takes:                [has_error]
     caller                // [caller, has_error]
     0x24 calldataload     // [amount, caller, has_error]
     0x10 _LOAD_ADDRESS()  // [to, amount, caller, has_error]
@@ -289,7 +290,7 @@
     sload                // [caller_bal]
     callvalue            // [callvalue]
     add                  // [caller_bal']
-    caller               // [caller]
+    caller               // [caller, caller_bal']
     sstore               // []
     caller               // [caller]
     _EMIT_DEPOSIT(msize) // []
@@ -619,9 +620,9 @@
         /* padding (41) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop
-    dest_0x07f: __NO_MATCH()
-    dest_0x08f: __NO_MATCH()
-    dest_0x09f:
+    dest_0x07: __NO_MATCH()
+    dest_0x08: __NO_MATCH()
+    dest_0x09:
         // 0x095ea7b3
         __FUNC_SIG(approve) 
         __NON_PAYABLE_SELECTOR_CHECK()
