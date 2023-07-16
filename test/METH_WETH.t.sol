@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 import {METHConstants} from "src/METHConstants.sol";
+import {console2 as console} from "forge-std/console2.sol";
 
 interface ShanghaiChecker {
     function shanghaiEnabled() external view returns (bool);
@@ -32,6 +33,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         (bool success,) = recipient.call{value: 1 wei}("");
         vm.assume(success);
         vm.deal(recipient, prevBal);
+        vm.deal(sender, 0);
         _;
     }
 
@@ -234,12 +236,15 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 withdrawAmount,
         uint256 allowance
     ) public acceptsETH(operator) {
+        vm.assume(operator != address(meth));
+
         allowance = bound(allowance, METHConstants.MIN_INF_ALLOWANCE, type(uint256).max);
         withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
 
         vm.prank(owner);
         meth.approve(operator, allowance);
         _grantMeth(owner, startAmount);
+        assertEq(meth.balanceOf(owner), startAmount, "balance setup failed");
 
         uint256 prevBal = operator.balance;
 
@@ -248,9 +253,9 @@ contract METH_WETHTest is Test, METHBaseTest {
         emit Withdrawal(owner, withdrawAmount);
         meth.withdrawFrom(owner, withdrawAmount);
 
-        assertEq(operator.balance, prevBal + withdrawAmount);
-        assertEq(meth.balanceOf(owner), startAmount - withdrawAmount);
-        assertEq(meth.allowance(owner, operator), allowance);
+        assertEq(operator.balance, prevBal + withdrawAmount, "balance wrong");
+        assertEq(meth.balanceOf(owner), startAmount - withdrawAmount, "withdraw wrong");
+        assertEq(meth.allowance(owner, operator), allowance, "allowance wrong");
     }
 
     function testUnimplementedReverts() public {
@@ -270,7 +275,7 @@ contract METH_WETHTest is Test, METHBaseTest {
             uint32 selector = exceptionalSelectors[i];
             uint256 jumpDest = (selector >> 0x12) | 0x3f;
 
-            assertTrue(address(meth).code[jumpDest] != 0x5b);
+            assertTrue(address(meth).code[jumpDest] != 0x5b, "MISSING JUMPDEST");
         }
 
         address meth_ = address(meth);
@@ -296,11 +301,14 @@ contract METH_WETHTest is Test, METHBaseTest {
             }
 
             if (isExceptional) {
-                assertGt(gasChange, maxGas);
+                assertGt(gasChange, maxGas, "Exceptional Didn't Use Enough");
             } else {
                 // Some methods will cheaply revert immediately, others like `transferFrom` will
                 // only revert once the first bundled check is reached.
-                assertLt(gasChange, 5000);
+                if (gasChange >= 5000) {
+                    console.log("selector %x too much", selector);
+                    fail();
+                }
             }
 
             assertFalse(success, "Unimplemented selector should've reverted");

@@ -16,7 +16,11 @@ def main():
             )
         )
 
-    bytecode = bytes.fromhex(subprocess.getoutput(f'huffc -r src/__temp.huff'))
+    bytecode = bytes.fromhex(
+        subprocess.getoutput(
+            f'huffc -r src/__temp.huff'
+        ).splitlines()[-1]
+    )
     push_len = (bytecode[0] & 0x1f) + 1
     value = int.from_bytes(bytecode[1: 1 + push_len], 'big')
 

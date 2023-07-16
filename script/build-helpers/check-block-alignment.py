@@ -8,10 +8,10 @@ JUMPDEST = 0x5b
 
 
 def main():
+    direct_out = subprocess.getoutput('huffc -r src/METH_WETH.huff')
+    out = direct_out.splitlines()[-1]
 
-    runtime_bytecode = bytes.fromhex(
-        subprocess.getoutput('huffc -r src/METH_WETH.huff')
-    )
+    runtime_bytecode = bytes.fromhex(out)
 
     print(f'dispatcher head:\n     0x{runtime_bytecode[:SIZE - 1].hex()}')
 
