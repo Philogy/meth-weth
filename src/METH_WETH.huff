@@ -646,20 +646,26 @@
     calldatasize empty_revert jumpi
 }
 
-#define macro MAIN() = takes(0) returns(0) {
-    // Load selector.
+#define macro __FN_DISPATCHER_CORE() = takes(0) returns(1) {
     __SELECTOR()        // [selector]
-    // Isolate unique selector bits.
-    dup1 [S_SHIFT] shr  // [unique_sel_data, selector]
-    // Set lower bits to 1 to ensure alternative selectors also jump to valid destinations.
-    [S_COVER] or        // [jump_loc, selector]
-    jump                // [selector]
+    // -- Isolate unique selector bits.
+    dup1                // [selector, selector]
+    [S_SHIFT]           // [selector, selector, sel_shift]
+    shr                 // [selector, unique_sel_bits]
+    // -- Fixed mask for lower bits.
+    [S_COVER]           // [selector, unique_sel_bits, sel_cover]
+    or                  // [selector, jump_dest]
+    jump             // @> [selector]
+}
 
-    // Padding to make sure jump dests start at the right offset.
-    /* padding (50) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                       stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                       stop stop stop stop stop
+#define macro MAIN() = takes(0) returns(0) {
+    __FN_DISPATCHER_CORE()
+
+        // Padding to make sure jump dests start at the right offset.
+        /* padding (50) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop
 
     dest_0x00:
         __RECEIVE_CHECK()
