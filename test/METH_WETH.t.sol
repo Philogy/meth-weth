@@ -360,12 +360,6 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(meth.allowance(owner, spender), 0);
     }
 
-    function testShanghai() public {
-        ShanghaiChecker checker = ShanghaiChecker((new HuffDeployer()).deploy("src/utils/ShanghaiChecker.huff"));
-
-        assertTrue(checker.shanghaiEnabled());
-    }
-
     function _loadWord(bytes memory _bytes, uint256 _offset) internal pure returns (uint256 word) {
         assembly {
             word := mload(add(_bytes, _offset))

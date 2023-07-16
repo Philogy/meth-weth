@@ -7,7 +7,7 @@
          __FUNC_SIG(usePush0)        eq usePush0        jumpi
 
     empty_revert:
-        0x0 dup1 revert
+        <zero> <zero> revert
 
     shanghaiEnabled:
         __FUNC_SIG(usePush0)     // [usePush0_selector]
