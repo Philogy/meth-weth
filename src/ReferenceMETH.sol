@@ -2,7 +2,7 @@
 pragma solidity 0.8.15;
 
 import {IMETH} from "./interfaces/IMETH.sol";
-import {METHConstants} from "./METHConstants.sol";
+import {MIN_INF_ALLOWANCE} from "./METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
@@ -123,9 +123,12 @@ contract ReferenceMETH is IMETH {
     }
 
     function _useAllowance(address owner, uint256 amount) internal {
-        if (_allowance(owner, msg.sender).value < METHConstants.MIN_INF_ALLOWANCE) {
-            require(_allowance(owner, msg.sender).value >= amount);
-            _allowance(owner, msg.sender).value -= amount;
+        uint256 allowance = _allowance(owner, msg.sender).value;
+        if (allowance < MIN_INF_ALLOWANCE) {
+            require(allowance >= amount);
+            unchecked {
+                _allowance(owner, msg.sender).value = allowance - amount;
+            }
         }
     }
 

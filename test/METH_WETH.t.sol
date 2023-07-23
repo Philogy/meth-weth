@@ -4,7 +4,7 @@ pragma solidity 0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
-import {METHConstants} from "src/METHConstants.sol";
+import {MIN_INF_ALLOWANCE} from "src/METHConstants.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 interface ShanghaiChecker {
@@ -72,13 +72,13 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(decimals, 18);
     }
 
-    function test_fuzzingDeposit(address _owner, uint128 _x) public {
-        vm.deal(_owner, _x);
-        vm.prank(_owner);
+    function test_fuzzingDeposit(address owner, uint128 x) public {
+        vm.deal(owner, x);
+        vm.prank(owner);
         vm.expectEmit(true, true, true, true);
-        emit Deposit(_owner, _x);
-        meth.deposit{value: _x}();
-        assertEq(meth.balanceOf(_owner), _x);
+        emit Deposit(owner, x);
+        meth.deposit{value: x}();
+        assertEq(meth.balanceOf(owner), x);
     }
 
     function test_fuzzingDepositTo(address _from, address _to, uint128 _x) public {
@@ -134,7 +134,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint128 startAmount,
         uint128 transferAmount
     ) public {
-        allowance = bound(allowance, METHConstants.MIN_INF_ALLOWANCE, type(uint256).max);
+        allowance = bound(allowance, MIN_INF_ALLOWANCE, type(uint256).max);
         startAmount = uint128(bound(startAmount, 0, type(uint128).max));
         transferAmount = uint128(bound(transferAmount, 0, startAmount));
 
@@ -169,7 +169,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint128 _startAmount,
         uint128 _transferAmount
     ) public {
-        _allowance = bound(_allowance, _startAmount, METHConstants.MIN_INF_ALLOWANCE - 1);
+        _allowance = bound(_allowance, _startAmount, MIN_INF_ALLOWANCE - 1);
         vm.assume(_allowance >= _startAmount);
         vm.assume(_startAmount >= _transferAmount);
 
@@ -203,7 +203,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 allowance
     ) public acceptsETH(operator) {
         vm.assume(operator != address(meth));
-        allowance = bound(allowance, 0, METHConstants.MIN_INF_ALLOWANCE - 1);
+        allowance = bound(allowance, 0, MIN_INF_ALLOWANCE - 1);
         withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
 
         vm.prank(owner);
@@ -238,7 +238,7 @@ contract METH_WETHTest is Test, METHBaseTest {
     ) public acceptsETH(operator) {
         vm.assume(operator != address(meth));
 
-        allowance = bound(allowance, METHConstants.MIN_INF_ALLOWANCE, type(uint256).max);
+        allowance = bound(allowance, MIN_INF_ALLOWANCE, type(uint256).max);
         withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
 
         vm.prank(owner);

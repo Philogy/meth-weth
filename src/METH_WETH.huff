@@ -1,5 +1,4 @@
 #include "./interfaces/IMETH.huff"
-
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
 ////////////////////////////////////////////////////////////////
@@ -31,6 +30,13 @@
 //                       UTILITY MACROS                       //
 ////////////////////////////////////////////////////////////////
 
+/**
+ * @dev Acts as an alias to `lt(a, b)`. Equivalent but more efficient to `and(iszero(a), b)`.
+ * @param:stack a Value that must be zero for the expression to be true, can be any non-zero value.
+ * @param:stack b Value that must be 0x1 for the expression to be true. Can lead to invalid results
+ * if not a lone bit.
+ * @return:stack res A 0 or 1 depending on whether the expression is true.
+ */
 #define macro _NOTA_AND_B() = takes(2) returns(1) {
     // takes:          [b, a]
 
@@ -44,6 +50,11 @@
     // returns:        [res]
 }
 
+/**
+ * @dev Pushes a sanitized address from calldata to the stack.
+ * @param:stack addr_offset The parameters offset in calldata (`0x10 + param_index * 0x20`)
+ * @return:stack addr The sanitized address.
+ */
 #define macro _LOAD_ADDRESS() = takes(1) returns(1) {
     // takes:             [addr_offset]
     calldataload       // [shifted_addr]
@@ -52,6 +63,13 @@
     // returns:        // [addr]
 }
 
+/**
+ * @dev Determines whether the given `allowance` is "practically infinite".
+ * @param:stack allowance An allowance as a full EVM word.
+ * @param:macro z0 1-byte zero pushing opcode.
+ * @return:stack is_infinite Whether the given `allowance` is practically infinite. 0 if false,
+ * non-zero value in the range [1, 255] if true.
+ */
 #define macro _IS_INF(z0) = takes(1) returns(1) {
     // takes:      [allowance]
     <z0>        // [allowance, 0]
@@ -70,7 +88,7 @@
 
 #define macro _SEND_ETH(z0) = takes(6) returns(0) {
     // takes:                [0, 0, 0, 0, amount, recipient]
-    gas                   // [0, 0, 0, 0, amount, recipient, ags]
+    gas                   // [0, 0, 0, 0, amount, recipient, gas]
     call                  // [success]
     no_revert jumpi       // []
         returndatasize    // [rdz]
@@ -99,25 +117,25 @@
     // returns:               []
 }
 
-#define macro _EMIT_DEPOSIT(z0, word_size) = takes(1) returns(0) {
+#define macro _EMIT_DEPOSIT(z0) = takes(1) returns(0) {
     // takes:                 [to]
     callvalue              // [to, callvalue]
     <z0>                   // [to, callvalue, 0]
     mstore                 // [to]
     __EVENT_HASH(Deposit)  // [to, Deposit.sig]
-    <word_size>            // [to, Deposit.sig, 32]
-    <z0>                   // [to, Deposit.sig, 32, 0]
+    0x10                   // [to, Deposit.sig, 16]
+    dup1                   // [to, Deposit.sig, 16, 16]
     log2                   // []
     // returns:               []
 }
 
-#define macro _EMIT_WITHDRAWAL(z0, word_size) = takes(2) returns(0) {
+#define macro _EMIT_WITHDRAWAL(z0) = takes(2) returns(0) {
     // takes:                   [from, amount]
     <z0>                     // [from, amount, 0]
     mstore                   // [from]
     __EVENT_HASH(Withdrawal) // [from, Withdrawal.sig]
-    <word_size>              // [from, Withdrawal.sig, 32]
-    <z0>                     // [from, Withdrawal.sig, 32, 0]
+    0x10                     // [from, Withdrawal.sig, 16]
+    dup1                     // [from, Withdrawal.sig, 16, 16]
     log2                     // []
     // returns:                 []
 }
@@ -174,7 +192,7 @@
     // -- Emit event.
     caller     // [caller.bal, caller]
     dup2       // [caller.bal, caller, caller.bal]
-    _EMIT_WITHDRAWAL(<z0>, msize)
+    _EMIT_WITHDRAWAL(<z0>)
     //            [caller.bal]
     // returns:   [caller.bal]
 }
@@ -217,7 +235,7 @@
     caller     // [caller_bal', caller]
     sstore     // []
     caller     // [caller]
-    _EMIT_DEPOSIT(<z0>, msize)
+    _EMIT_DEPOSIT(<z0>)
     //            []
     // returns:   []
 }
@@ -239,7 +257,7 @@
     sstore             // [0, 0, 0, 0, amount]
     caller             // [0, 0, 0, 0, amount, caller]
     dup2               // [0, 0, 0, 0, amount, caller, amount]
-    _EMIT_WITHDRAWAL(<z0>, msize)
+    _EMIT_WITHDRAWAL(<z0>)
     //                    [0, 0, 0, 0, amount]
     // returns:           [0, 0, 0, 0, amount]
 }
@@ -400,7 +418,7 @@
     add                        // [to, to.bal']
     dup2                       // [to, to.bal', to]
     sstore                     // [to]
-    _EMIT_DEPOSIT(<z0>, msize) // []
+    _EMIT_DEPOSIT(<z0>) // []
     stop                       // [] -- end
 }
 
@@ -503,7 +521,7 @@
         dup2                           // [0,        0, 0, 0, amount, from, from.bal', from]
         sstore                         // [0,        0, 0, 0, amount, from]
         dup2                           // [0,        0, 0, 0, amount, from, amount]
-        _EMIT_WITHDRAWAL(<z0>, 0x20)   // [0,        0, 0, 0, amount]
+        _EMIT_WITHDRAWAL(<z0>)         // [0,        0, 0, 0, amount]
         caller                         // [0,        0, 0, 0, amount, caller]
         _SEND_ETH(<z0>)                // [] -- end
 }
@@ -524,8 +542,8 @@
     sub                          // [0,         0, 0, 0, amount, from, from.bal']
     dup2                         // [0,         0, 0, 0, amount, from, from.bal', from]
     sstore                       // [0,         0, 0, 0, amount, from]
-    dup2                         // []
-    _EMIT_WITHDRAWAL(<z0>, 0x20) // [0,         0, 0, 0, amount]
+    dup2                         // [0,         0, 0, 0, amount, from, amount]
+    _EMIT_WITHDRAWAL(<z0>)       // [0,         0, 0, 0, amount]
     0x24 calldataload            // [0,         0, 0, 0, amount, to]
     _SEND_ETH(<z0>)              // [] -- end
 }
@@ -675,7 +693,7 @@
     dest_0x00:
         __RECEIVE_CHECK()
         DEPOSIT(returndatasize)
-        /* padding (11) */ stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (10) */ stop stop stop stop stop stop stop stop stop stop
     dest_0x01: __NO_MATCH()
     dest_0x02: __NO_MATCH()
     dest_0x03: __NO_MATCH()
@@ -736,9 +754,9 @@
         INVALID_NON_PAYABLE()
         WITHDRAW_TO(callvalue)
         /// @dev Selectors 0x21000000 - 0x21ffffff will exceptionally revert.
-        /* padding (39) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (38) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop
     dest_0x22: __NO_MATCH()
     dest_0x23:
         // 0x23b872dd
@@ -756,7 +774,7 @@
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT_AND_APPROVE(returndatasize)
         /// @dev Selectors 0x29000000 - 0x29ffffff will exceptionally revert.
-        /* padding (11) */ stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (10) */ stop stop stop stop stop stop stop stop stop stop
     dest_0x2a: __NO_MATCH()
     dest_0x2b: __NO_MATCH()
     dest_0x2c: __NO_MATCH()
@@ -767,9 +785,9 @@
         INVALID_NON_PAYABLE()
         WITHDRAW(callvalue)
         /// @dev Selectors 0x2f000000 - 0x2fffffff will exceptionally revert.
-        /* padding (41) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (40) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop
     dest_0x30: __NO_MATCH()
     dest_0x31:
         // 0x313ce567
@@ -881,10 +899,10 @@
         __NON_PAYABLE_SELECTOR_CHECK()
         WITHDRAW_ALL(callvalue)
         /// @dev Selectors 0x86000000 - 0x86ffffff will exceptionally revert.
-        /* padding (50) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (49) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop stop stop 
+                           stop stop stop stop stop stop stop
     dest_0x87: __NO_MATCH()
     dest_0x88: __NO_MATCH()
     dest_0x89: __NO_MATCH()
@@ -962,7 +980,7 @@
         __FUNC_SIG(depositTo)
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT_TO(returndatasize)
-        /* padding (01) */ stop
+        /* padding (00) */
     dest_0xb8: __NO_MATCH()
     dest_0xb9: __NO_MATCH()
     dest_0xba: __NO_MATCH()
@@ -987,10 +1005,10 @@
         __NON_PAYABLE_SELECTOR_CHECK()
         WITHDRAW_ALL_TO(callvalue)
         /// @dev Selectors 0xcb000000 - 0xcbffffff will exceptionally revert.
-        /* padding (48) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+        /* padding (47) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                            stop stop stop stop stop stop stop stop stop stop stop stop stop stop
-                           stop stop stop stop stop stop
+                           stop stop stop stop stop
     dest_0xcc: __NO_MATCH()
     dest_0xcd: __NO_MATCH()
     dest_0xce: __NO_MATCH()
@@ -1000,7 +1018,7 @@
         __FUNC_SIG(deposit)
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT(returndatasize)
-        /* padding (06) */ stop stop stop stop stop stop
+        /* padding (05) */ stop stop stop stop stop
     dest_0xd1: __NO_MATCH()
     dest_0xd2: __NO_MATCH()
     dest_0xd3: __NO_MATCH()
