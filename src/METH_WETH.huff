@@ -780,6 +780,8 @@
     empty_revert jumpi           // []
 
     // -- Determine metadata source (TODO: Add actual addresses).
+    // Deploy testing fallback.
+    _CHECK_METADATA(<z0>, 0x336e5B64961C2629f7AbF5F98cAecb70291A194E)
     // Fallback address for testing `keccak256("METH.metadata-source.test")[12:32]`
     _CHECK_METADATA(<z0>, 0x720018705211DC9Bd02277F2c36c0f7b43c0522f)
     // Revert by default if no metadata source found.

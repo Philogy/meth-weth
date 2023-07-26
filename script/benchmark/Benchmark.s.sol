@@ -10,7 +10,7 @@ import {IWETH9} from "../../src/interfaces/IWETH9.sol";
 /// @author philogy <https://github.com/philogy>
 contract BenchmarkScript is Test, Script {
     address internal constant WETH9 = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address internal constant METH = 0x78A5dF77246f3Dfd8a92bce3785acc72DF01442f;
+    address internal constant METH = 0x91DD230D11BD6640ad29C355f155a9a3C5a75b87;
 
     uint256 internal constant TEST_PKEY1 = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
