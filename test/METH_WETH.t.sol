@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
 import {METHBaseTest} from "./utils/METHBaseTest.sol";
@@ -72,22 +72,20 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(decimals, 18);
     }
 
-    function test_fuzzingDeposit(address owner, uint128 x) public {
-        vm.deal(owner, x);
+    function test_fuzzingDeposit(address owner, uint128 amount) public {
+        vm.deal(owner, amount);
         vm.prank(owner);
-        vm.expectEmit(true, true, true, true);
-        emit Deposit(owner, x);
-        meth.deposit{value: x}();
-        assertEq(meth.balanceOf(owner), x);
+        expectDepositEvent(owner, amount);
+        meth.deposit{value: amount}();
+        assertEq(meth.balanceOf(owner), amount);
     }
 
-    function test_fuzzingDepositTo(address _from, address _to, uint128 _x) public {
-        vm.deal(_from, _x);
-        vm.prank(_from);
-        vm.expectEmit(true, true, true, true);
-        emit Deposit(_to, _x);
-        meth.depositTo{value: _x}(_to);
-        assertEq(meth.balanceOf(_to), _x);
+    function test_fuzzingDepositTo(address from, address to, uint128 amount) public {
+        vm.deal(from, amount);
+        vm.prank(from);
+        expectDepositEvent(to, amount);
+        meth.depositTo{value: amount}(to);
+        assertEq(meth.balanceOf(to), amount);
     }
 
     function test_fuzzingTransfer(address _from, address _to, uint128 _startAmount, uint128 _transferAmount) public {
@@ -203,6 +201,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 allowance
     ) public acceptsETH(operator) {
         vm.assume(operator != address(meth));
+        startAmount = bound(startAmount, 0, type(uint128).max);
         allowance = bound(allowance, 0, MIN_INF_ALLOWANCE - 1);
         withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
 
@@ -213,20 +212,12 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 prevBal = operator.balance;
 
         vm.prank(operator);
-        vm.expectEmit(true, true, true, true);
-        emit Withdrawal(owner, withdrawAmount);
+        expectWithdrawalEvent(owner, withdrawAmount);
         meth.withdrawFrom(owner, withdrawAmount);
 
         assertEq(operator.balance, prevBal + withdrawAmount);
         assertEq(meth.balanceOf(owner), startAmount - withdrawAmount);
         assertEq(meth.allowance(owner, operator), allowance - withdrawAmount);
-    }
-
-    function test_broken() public {
-        setUp();
-        test_fuzzingWithdrawFromFiniteAllowance(
-            0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000003, 0, 0, 0
-        );
     }
 
     function test_fuzzingWithdrawFromInfiniteAllowance(
@@ -238,6 +229,7 @@ contract METH_WETHTest is Test, METHBaseTest {
     ) public acceptsETH(operator) {
         vm.assume(operator != address(meth));
 
+        startAmount = bound(startAmount, 0, type(uint128).max);
         allowance = bound(allowance, MIN_INF_ALLOWANCE, type(uint256).max);
         withdrawAmount = bound(withdrawAmount, 0, min(allowance, startAmount));
 
@@ -249,8 +241,7 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 prevBal = operator.balance;
 
         vm.prank(operator);
-        vm.expectEmit(true, true, true, true);
-        emit Withdrawal(owner, withdrawAmount);
+        expectWithdrawalEvent(owner, withdrawAmount);
         meth.withdrawFrom(owner, withdrawAmount);
 
         assertEq(operator.balance, prevBal + withdrawAmount, "balance wrong");
@@ -377,5 +368,27 @@ contract METH_WETHTest is Test, METHBaseTest {
 
     function max(uint256 x, uint256 y) internal pure returns (uint256) {
         return x > y ? x : y;
+    }
+
+    function expectDepositEvent(address owner, uint256 amount) internal {
+        assertLt(amount, 1 << 128);
+        bytes32 depositEventSig = keccak256("Deposit(address,uint256)");
+        vm.expectEmit(true, true, true, true);
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, amount)
+            log2(0x10, 0x10, depositEventSig, owner)
+        }
+    }
+
+    function expectWithdrawalEvent(address owner, uint256 amount) internal {
+        assertLt(amount, 1 << 128);
+        bytes32 withdrawalEventSig = keccak256("Withdrawal(address,uint256)");
+        vm.expectEmit(true, true, true, true);
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, amount)
+            log2(0x10, 0x10, withdrawalEventSig, owner)
+        }
     }
 }

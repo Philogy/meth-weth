@@ -1,4 +1,5 @@
 #include "./interfaces/IMETH.huff"
+
 ////////////////////////////////////////////////////////////////
 //             SELECTOR SWITCH CONSTANTS                      //
 ////////////////////////////////////////////////////////////////
@@ -11,14 +12,23 @@
 ////////////////////////////////////////////////////////////////
 // ================== Decimals ===================
 /// @dev METH has 18 decimals meaning a balance of `1150100000000000000` should be displayed as `1.1501`.
+#define constant DECIMALS_OFFSET = 0xc8d
 #define constant METH_DECIMALS = 0x12
 // ==================== Name =====================
+#define constant MAX_NAME_LEN = 0x40
+#define constant NAME_OFFSET = 0x40e1
+#define constant NAME_ENCODED_OFFSET = 0x20
 #define table NAME_DATA {
-    0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000214d6178696d616c6c7920456666696369656e742057726170706564204574686572
+  0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000214d6178696d616c6c7920456666696369656e74205772617070656420457468657200000000000000000000000000000000000000000000000000000000000000
 }
 // =================== Symbol ====================
 // symbol.length ++ "METH"
+#define constant MAX_SYMBOL_LEN = 0x1f
+#define constant SYMBOL_OFFSET = 0x2591
 #define constant PACKED_SYMBOL = 0x044d455448000000000000000000000000000000000000000000000000000000
+
+// 1 (padding) + 1 (decimals) + 32 (packed symbol) + 128 (abi-encoded name)
+#define constant METADATA_SRC_SIZE = 0xa2 
 
 ////////////////////////////////////////////////////////////////
 //                      OTHER CONSTANTS                       //
@@ -352,6 +362,10 @@
     return             // [] -- end
 }
 
+////////////////////////////////////////////////////////////////
+//                     ERC20 CORE METHODS                     //
+////////////////////////////////////////////////////////////////
+
 #define macro TRANSFER(z0) = takes(1) returns(0) {
     // takes:                 [has_error]
     caller                 // [has_error, caller]
@@ -404,6 +418,15 @@
     _TRANSFER_FROM_END(<z0>) // [] -- end
 }
 
+#define macro APPROVE(z0) = takes(0) returns(0) {
+    _APPROVE(<z0>)  // []
+    stop            // [] -- end
+}
+
+////////////////////////////////////////////////////////////////
+//               DEPOSIT (AKA WRAPPING) METHODS               //
+////////////////////////////////////////////////////////////////
+
 #define macro DEPOSIT(z0) = takes(0) returns(0) {
     _DEPOSIT(<z0>)        // []
     stop                  // [] -- end
@@ -428,10 +451,9 @@
     stop                  // [] -- end
 }
 
-#define macro APPROVE(z0) = takes(0) returns(0) {
-    _APPROVE(<z0>)  // []
-    stop            // [] -- end
-}
+////////////////////////////////////////////////////////////////
+//             WITHDRAW (AKA UNWRAPPING) METHODS              //
+////////////////////////////////////////////////////////////////
 
 #define macro WITHDRAW(z0) = takes(1) returns(0) {
     // takes:                  [has_error]
@@ -579,6 +601,10 @@
     _WITHDRAW_FROM_TO_END(<z0>) // -- end
 }
 
+////////////////////////////////////////////////////////////////
+//                       MISC. METHODS                        //
+////////////////////////////////////////////////////////////////
+
 #define macro SWEEP_LOST(z0) = takes(0) returns(0) {
     [LOST_N_FOUND]         // [sweep_dest]
     // -- Load lost tokens.
@@ -613,11 +639,15 @@
     stop
 }
 
+////////////////////////////////////////////////////////////////
+//               FUNCTION DISPATCHER COMPONENTS               //
+////////////////////////////////////////////////////////////////
+
 #define macro __SELECTOR(z0) = takes(0) returns(1) {
     // takes:       []
     <z0>         // [0]
     calldataload // [cd[0:32]]
-    0xe0         // [224, cd[0:32]]
+    0xe0         // [cd[0:32], 224]
     shr          // [selector]
     // returns:     [selector]
 }
@@ -627,7 +657,7 @@
 #define macro INVALID_NON_PAYABLE() = takes(2) returns(1) {
     // takes:                [msg.sig, selector]
     sub                   // [selector != msg.sig]
-    callvalue             // [selector != msg.sig, callvalue]
+    callvalue             // [selector != msg.sig, msg.value]
     or                    // [selector != msg.sig || (msg.value != 0)]
     // returns:              [invalid]
 }
@@ -636,8 +666,9 @@
 #define macro VALID_NON_PAYABLE() = takes(2) returns(1) {
     // takes:                [selector, msg.sig]
     eq                    // [selector == msg.sig]
-    callvalue             // [msg.value, selector == msg.sig]
+    callvalue             // [selector == msg.sig, msg.value]
     _NOTA_AND_B()         // [no_error]
+    // returns:              [no_error]
 }
 
 /// @dev Size: 12
@@ -645,6 +676,7 @@
     // takes:                [msg.sig, selector]
     INVALID_NON_PAYABLE() // [invalid]
     empty_revert jumpi    // []
+    // returns:              []
 }
 
 /// @dev Size: 10
@@ -652,6 +684,7 @@
     // takes:             [msg.sig, selector]
     sub                // [selector != msg.sig]
     empty_revert jumpi // []
+    // returns:           []
 }
 
 #define macro __NO_MATCH() = takes(0) returns(0) {
@@ -680,6 +713,104 @@
     or                  // [selector, jump_dest]
     jump             // @> [selector]
 }
+
+////////////////////////////////////////////////////////////////
+//                 DEPLOYMENT & INTIALIZATION                 //
+////////////////////////////////////////////////////////////////
+
+#define macro _CHECK_METADATA(src) = takes(0) returns(0) {
+    <src>                // [src]
+    dup1                 // [src, src]
+    extcodesize          // [src, src_size]
+    [METADATA_SRC_SIZE]  // [src, src_size, expected_size]
+    eq                   // [src, valid_size]
+    found_metadata jumpi // [src]
+    pop                  // []
+}
+
+#define macro _INSERT_METADATA(src_offset, length) = takes(2) returns(1) {
+    // takes:               [src, mem_offset]
+    <length>             // [src, mem_offset, length]
+    swap1                // [src, length, mem_offset]
+    <src_offset>         // [src, length, mem_offset, src_offset]
+    swap1                // [src, length, src_offset, mem_offset]
+    dup4                 // [src, length, src_offset, mem_offset, src]
+    extcodecopy          // [src]
+    // returns:             [src]
+}
+
+#define macro _CONSTRUCTOR(z0) = takes(0) returns(0) {
+    // -- Check no msg.value was sent.
+    callvalue                    // [msg.value]
+    empty_revert jumpi           // []
+
+    // -- Determine metadata source (TODO: Add actual addresses).
+    // Fallback address for testing `keccak256("METH.metadata-source.test")[12:32]`
+    _CHECK_METADATA(0x720018705211DC9Bd02277F2c36c0f7b43c0522f)
+    // Revert by default if no metadata source found.
+
+    empty_revert:                // [...]
+        <z0> <z0>                // [..., 0, 0]
+        revert                   // [...] -- end
+    found_metadata:              // [src]
+
+    // -- Validate metadata (check symbol.length <= 31 && name.length <= 64).
+    // Format 0x00 <1-byte decimal> <1-byte symbol length> <31-byte symbol> <128-byte ABI encoded name>.
+    0x60                         // [src, 96]
+    0x2                          // [src, 96, 2]
+    <z0>                         // [src, 96, 2, 0]
+    dup4                         // [src, 96, 2, 0, src]
+    // Only copies packed symbol and first 64 bytes of name.
+    extcodecopy                  // [src]
+    // Check packed symbol length atmost 31 bytes.
+    <z0> mload                   // [src, packed_symbol]
+    <z0> byte                    // [src, symbol_length]
+    [MAX_SYMBOL_LEN]             // [src, symbol_length, max_symbol_length]
+    lt                           // [src, symbol_length > max_symbol_length]
+    empty_revert jumpi           // [src]
+    // Check encoded name offset.
+    0x20 mload                   // [src, name_offset]
+    [NAME_ENCODED_OFFSET]        // [src, name_offset, expected_offset]
+    sub                          // [src, name_offset != expected_offset]
+    empty_revert jumpi           // [src]
+    // Check name length
+    0x40 mload                   // [src, name_length]
+    [MAX_NAME_LEN]               // [src, name_length, max_name_length]
+    lt                           // [src, name_length > max_name_length]
+    empty_revert jumpi           // [src]
+
+    // -- Copy main code into memory.
+    __codesize(CONSTRUCTOR)      // [src, constructor_size]
+    codesize                     // [src, constructor_size, total_size]
+    sub                          // [src, runtime_size]
+    swap1                        // [runtime_size, src]
+    dup2                         // [runtime_size, src, runtime_size]
+    __codesize(CONSTRUCTOR)      // [runtime_size, src, runtime_size, runtime_offset]
+    <z0>                         // [runtime_size, src, runtime_size, runtime_offset, 0]
+    codecopy                     // [runtime_size, src]
+
+    // -- Insert metadata into code.
+    // Insert decimals.
+    [DECIMALS_OFFSET]            // [runtime_size, src, decimals_offset]
+    _INSERT_METADATA(0x1, 0x1)   // [runtime_size, src]
+    [SYMBOL_OFFSET]              // [runtime_size, src, symbol_offset]
+    _INSERT_METADATA(0x2, 0x20)  // [runtime_size, src]
+    [NAME_OFFSET]                // [runtime_size, src, name_offset]
+    _INSERT_METADATA(0x22, 0x80) // [runtime_size, src]
+    pop                          // [runtime_size]
+
+    // -- Return final code.
+    <z0>                         // [runtime_size, 0]
+    return                       // [] -- end
+}
+
+#define macro CONSTRUCTOR() = takes(0) returns(0) {
+    _CONSTRUCTOR(returndatasize)
+}
+
+////////////////////////////////////////////////////////////////
+//                            MAIN                            //
+////////////////////////////////////////////////////////////////
 
 #define macro MAIN() = takes(0) returns(0) {
     __FN_DISPATCHER_CORE(returndatasize)
