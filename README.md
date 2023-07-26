@@ -87,6 +87,11 @@ variables. Certain methods also allow contracts to avoid otherwise unused `recei
   WETH9.deposit{ value: amount}();
   WETH9.transfer(recipient, amount);
   ```
+- `METH.depositAndApprove{ value: amount }(spender, amount);` replaces:
+  ```solidity
+  WETH9.deposit{ value: amount}();
+  WETH9.approve(spender, amount);
+  ```
 - `METH.withdrawTo(recipient, amount);` replaces:
   ```solidity
   receive() external payable {

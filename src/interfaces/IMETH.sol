@@ -34,7 +34,7 @@ interface IMETH is IERC20Metadata {
 
     function depositTo(address _to) external payable;
 
-    function depositAndApprove(address _spender, uint256 _amount) external;
+    function depositAndApprove(address _spender, uint256 _amount) external payable;
 
     event Withdrawal(address indexed from, uint256 amount);
 
