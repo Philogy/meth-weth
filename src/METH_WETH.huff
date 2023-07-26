@@ -718,14 +718,49 @@
 //                 DEPLOYMENT & INTIALIZATION                 //
 ////////////////////////////////////////////////////////////////
 
-#define macro _CHECK_METADATA(src) = takes(0) returns(0) {
-    <src>                // [src]
-    dup1                 // [src, src]
-    extcodesize          // [src, src_size]
-    [METADATA_SRC_SIZE]  // [src, src_size, expected_size]
-    eq                   // [src, valid_size]
-    found_metadata jumpi // [src]
-    pop                  // []
+#define macro _CHECK_METADATA(z0, src) = takes(0) returns(0) {
+    <src>                  // [src]
+    dup1                   // [src, src]
+    extcodesize            // [src, src_size]
+    [METADATA_SRC_SIZE]    // [src, src_size, expected_size]
+    sub                    // [src, src_size != expected_size]
+    invalid_metadata jumpi // [src]
+
+    // -- Validate metadata (check symbol.length <= 31 && name.length <= 64).
+    // Format 0x00 <1-byte decimal> <1-byte symbol length> <31-byte symbol> <128-byte ABI encoded name>.
+    0x62                   // [src, 0x62]
+    <z0> <z0>              // [src, 0x62, 0, 0]
+    dup4                   // [src, 0x62, 0, 0, src]
+    // Only copies the first 98 bytes.
+    extcodecopy            // [src]
+    // Check leading 0x00 padding byte.
+    <z0> mload             // [src, metadata_container[:32]]
+    dup1                   // [src, metadata_container[:32], metadata_container[:32]]
+    <z0> byte              // [src, metadata_container[:32], padding_byte]
+    invalid_pop1 jumpi     // [src, metadata_container[:32]]
+    // Check symbol length.
+    0x2 byte               // [src, symbol_length]
+    [MAX_SYMBOL_LEN]       // [src, symbol_length, max_symbol_length]
+    lt                     // [src, symbol_length > max_symbol_length]
+    invalid_metadata jumpi // [src]
+    // Check encoded name offset.
+    0x22 mload             // [src, name_offset]
+    [NAME_ENCODED_OFFSET]  // [src, name_offset, expected_offset]
+    sub                    // [src, name_offset != expected_offset]
+    invalid_metadata jumpi // [src]
+    // Check name length
+    0x42 mload             // [src, name_length]
+    [MAX_NAME_LEN]         // [src, name_length, max_name_length]
+    lt                     // [src, name_length > max_name_length]
+    invalid_metadata jumpi // [src]
+
+    // If valid jump to found, ending search.
+    found_metadata jump    // [src]
+
+    invalid_pop1:          // [src, metadata_container[:32]]
+    pop                    // [src]
+    invalid_metadata:      // [src]
+    pop                    // []
 }
 
 #define macro _INSERT_METADATA(src_offset, length) = takes(2) returns(1) {
@@ -746,41 +781,13 @@
 
     // -- Determine metadata source (TODO: Add actual addresses).
     // Fallback address for testing `keccak256("METH.metadata-source.test")[12:32]`
-    _CHECK_METADATA(0x720018705211DC9Bd02277F2c36c0f7b43c0522f)
+    _CHECK_METADATA(<z0>, 0x720018705211DC9Bd02277F2c36c0f7b43c0522f)
     // Revert by default if no metadata source found.
 
     empty_revert:                // [...]
         <z0> <z0>                // [..., 0, 0]
         revert                   // [...] -- end
     found_metadata:              // [src]
-
-    // -- Validate metadata (check symbol.length <= 31 && name.length <= 64).
-    // Format 0x00 <1-byte decimal> <1-byte symbol length> <31-byte symbol> <128-byte ABI encoded name>.
-    0x62                         // [src, 0x62]
-    <z0> <z0>                    // [src, 0x62, 0, 0]
-    dup4                         // [src, 0x62, 0, 0, src]
-    // Only copies the first 98 bytes.
-    extcodecopy                  // [src]
-    // Check leading 0x00 padding byte.
-    <z0> mload                   // [src, metadata_container[:32]]
-    dup1                         // [src, metadata_container[:32], metadata_container[:32]]
-    <z0> byte                    // [src, metadata_container[:32], padding_byte]
-    empty_revert jumpi           // [src, metadata_container[:32]]
-    // Check symbol length.
-    0x2 byte                     // [src, symbol_length]
-    [MAX_SYMBOL_LEN]             // [src, symbol_length, max_symbol_length]
-    lt                           // [src, symbol_length > max_symbol_length]
-    empty_revert jumpi           // [src]
-    // Check encoded name offset.
-    0x22 mload                   // [src, name_offset]
-    [NAME_ENCODED_OFFSET]        // [src, name_offset, expected_offset]
-    sub                          // [src, name_offset != expected_offset]
-    empty_revert jumpi           // [src]
-    // Check name length
-    0x42 mload                   // [src, name_length]
-    [MAX_NAME_LEN]               // [src, name_length, max_name_length]
-    lt                           // [src, name_length > max_name_length]
-    empty_revert jumpi           // [src]
 
     // -- Copy main code into memory.
     __codesize(CONSTRUCTOR)      // [src, constructor_size]
