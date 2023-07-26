@@ -756,25 +756,28 @@
 
     // -- Validate metadata (check symbol.length <= 31 && name.length <= 64).
     // Format 0x00 <1-byte decimal> <1-byte symbol length> <31-byte symbol> <128-byte ABI encoded name>.
-    0x60                         // [src, 96]
-    0x2                          // [src, 96, 2]
-    <z0>                         // [src, 96, 2, 0]
-    dup4                         // [src, 96, 2, 0, src]
-    // Only copies packed symbol and first 64 bytes of name.
+    0x62                         // [src, 0x62]
+    <z0> <z0>                    // [src, 0x62, 0, 0]
+    dup4                         // [src, 0x62, 0, 0, src]
+    // Only copies the first 98 bytes.
     extcodecopy                  // [src]
-    // Check packed symbol length atmost 31 bytes.
-    <z0> mload                   // [src, packed_symbol]
-    <z0> byte                    // [src, symbol_length]
+    // Check leading 0x00 padding byte.
+    <z0> mload                   // [src, metadata_container[:32]]
+    dup1                         // [src, metadata_container[:32], metadata_container[:32]]
+    <z0> byte                    // [src, metadata_container[:32], padding_byte]
+    empty_revert jumpi           // [src, metadata_container[:32]]
+    // Check symbol length.
+    0x2 byte                     // [src, symbol_length]
     [MAX_SYMBOL_LEN]             // [src, symbol_length, max_symbol_length]
     lt                           // [src, symbol_length > max_symbol_length]
     empty_revert jumpi           // [src]
     // Check encoded name offset.
-    0x20 mload                   // [src, name_offset]
+    0x22 mload                   // [src, name_offset]
     [NAME_ENCODED_OFFSET]        // [src, name_offset, expected_offset]
     sub                          // [src, name_offset != expected_offset]
     empty_revert jumpi           // [src]
     // Check name length
-    0x40 mload                   // [src, name_length]
+    0x42 mload                   // [src, name_length]
     [MAX_NAME_LEN]               // [src, name_length, max_name_length]
     lt                           // [src, name_length > max_name_length]
     empty_revert jumpi           // [src]
