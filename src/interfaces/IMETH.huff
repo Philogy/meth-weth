@@ -26,7 +26,3 @@
 #define event Deposit(address indexed, uint256)
 #define event Withdrawal(address indexed, uint256)
 #define event Approval(address indexed, address indexed, uint256)
-// =================== Errors ====================
-#define error InsufficientBalance()
-#define error InsufficientAllowance()
-#define error RecipientZero()
