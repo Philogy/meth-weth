@@ -39,7 +39,9 @@ contract ReferenceMETH is IMETH {
     }
 
     function deposit() public payable {
-        _balanceOf(msg.sender).value += msg.value;
+        unchecked {
+            _balanceOf(msg.sender).value += msg.value;
+        }
         emit Deposit(msg.sender, msg.value);
     }
 
@@ -50,7 +52,7 @@ contract ReferenceMETH is IMETH {
         emit Deposit(to, msg.value);
     }
 
-    function depositAndApprove(address spender, uint256 amount) external {
+    function depositAndApprove(address spender, uint256 amount) external payable {
         deposit();
         approve(spender, amount);
     }
