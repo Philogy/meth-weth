@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity 0.8.19;
 
-import {IMETH} from "./interfaces/IMETH.sol";
-import {MIN_INF_ALLOWANCE} from "./METHConstants.sol";
+import {IMETH} from "../interfaces/IMETH.sol";
+import {MIN_INF_ALLOWANCE} from "../METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
@@ -125,11 +125,11 @@ contract ReferenceMETH is IMETH {
     }
 
     function _useAllowance(address owner, uint256 amount) internal {
-        uint256 allowance = _allowance(owner, msg.sender).value;
-        if (allowance < MIN_INF_ALLOWANCE) {
-            require(allowance >= amount);
+        uint256 currentAllowance = _allowance(owner, msg.sender).value;
+        if (currentAllowance < MIN_INF_ALLOWANCE) {
+            require(currentAllowance >= amount);
             unchecked {
-                _allowance(owner, msg.sender).value = allowance - amount;
+                _allowance(owner, msg.sender).value = currentAllowance - amount;
             }
         }
     }
@@ -146,20 +146,24 @@ contract ReferenceMETH is IMETH {
     function _sendEth(address to, uint256 amount) internal {
         (bool success,) = to.call{value: amount}("");
         if (!success) {
+            /// @solidity memory-safe-assembly
             assembly {
-                returndatacopy(0x00, 0x00, returndatasize())
-                revert(0x00, returndatasize())
+                let free := mload(0x40)
+                returndatacopy(free, 0x00, returndatasize())
+                revert(free, returndatasize())
             }
         }
     }
 
     function _balanceOf(address acc) internal pure returns (Value storage value) {
+        /// @solidity memory-safe-assembly
         assembly {
             value.slot := acc
         }
     }
 
     function _allowance(address owner, address spender) internal pure returns (Value storage value) {
+        /// @solidity memory-safe-assembly
         assembly {
             mstore(0x00, owner)
             mstore(0x20, spender)
