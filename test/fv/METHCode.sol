@@ -26,7 +26,7 @@ abstract contract METHCode is Test {
                 // RETURN
                 if eq(op, 0xf3) { break }
                 // Skip PUSH literals
-                if and(gt(op, 0x5f), lt(op, 0x81)) { codePtr := add(codePtr, sub(op, 0x5f)) }
+                if lt(sub(op, 0x60), 0x20) { codePtr := add(codePtr, sub(op, 0x5f)) }
             }
             mstore(sub(codePtr, 31), GENERAL_DEPLOYER)
 
