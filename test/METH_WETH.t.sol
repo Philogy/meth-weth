@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {METHBaseTest} from "./utils/METHBaseTest.sol";
 import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
 import {MIN_INF_ALLOWANCE} from "src/METHConstants.sol";
+import {Reverter} from "./mocks/Reverter.sol";
 import {console2 as console} from "forge-std/console2.sol";
 
 interface ShanghaiChecker {
@@ -19,23 +20,7 @@ contract METH_WETHTest is Test, METHBaseTest {
     event Deposit(address indexed to, uint256 amount);
     event Withdrawal(address indexed from, uint256 amount);
 
-    address giver = makeAddr("__setup_giver");
-
-    modifier realAddr(address _a) {
-        vm.assume(_a != address(0));
-        _;
-    }
-
-    modifier acceptsETH(address recipient) {
-        address sender = makeAddr("tempSender");
-        uint256 prevBal = recipient.balance;
-        hoax(sender, 1 wei);
-        (bool success,) = recipient.call{value: 1 wei}("");
-        vm.assume(success);
-        vm.deal(recipient, prevBal);
-        vm.deal(sender, 0);
-        _;
-    }
+    address internal immutable __methDealer = makeAddr("__methDealer");
 
     function testSymbol() public {
         bytes memory symbolCall = abi.encodeCall(meth.symbol, ());
@@ -86,6 +71,31 @@ contract METH_WETHTest is Test, METHBaseTest {
         expectDepositEvent(to, amount);
         meth.depositTo{value: amount}(to);
         assertEq(meth.balanceOf(to), amount);
+    }
+
+    function test_fuzzingDepositAndApprove(
+        address owner,
+        address spender,
+        uint256 startBal,
+        uint256 depositAmount,
+        uint256 preAllowance,
+        uint256 allowance
+    ) public {
+        vm.assume(owner != address(meth));
+        depositAmount = bound(depositAmount, 0, type(uint256).max - startBal);
+
+        dealMeth(owner, startBal);
+        startHoax(owner, depositAmount);
+
+        meth.approve(spender, preAllowance);
+        assertEq(meth.allowance(owner, spender), preAllowance);
+
+        vm.expectEmit(true, true, true, true);
+        emit Approval(owner, spender, allowance);
+        meth.depositAndApprove{value: depositAmount}(spender, allowance);
+
+        assertEq(meth.allowance(owner, spender), allowance);
+        assertEq(meth.balanceOf(owner), startBal + depositAmount);
     }
 
     function test_fuzzingTransfer(address _from, address _to, uint128 _startAmount, uint128 _transferAmount) public {
@@ -193,13 +203,57 @@ contract METH_WETHTest is Test, METHBaseTest {
         }
     }
 
+    function testWithdraw() public {
+        address owner = makeAddr("owner");
+
+        uint256 startBal = 3.1 ether;
+        dealMeth(owner, startBal);
+
+        uint256 withdrawAmount = 2.6892 ether;
+        vm.prank(owner);
+        expectWithdrawalEvent(owner, withdrawAmount);
+        meth.withdraw(withdrawAmount);
+
+        assertEq(meth.balanceOf(owner), startBal - withdrawAmount);
+        assertEq(owner.balance, withdrawAmount);
+    }
+
+    function test_fuzzingWithdrawRevert(bytes memory revertData) public {
+        Reverter reverter = new Reverter(revertData);
+
+        startHoax(address(reverter), 1 wei);
+
+        vm.expectRevert(revertData);
+        meth.withdraw(0);
+
+        vm.stopPrank();
+    }
+
+    function testWithdrawTo() public {
+        address owner = makeAddr("owner");
+        address recipient = makeAddr("recipient");
+
+        uint256 startBal = 4.38 ether;
+        dealMeth(owner, startBal);
+
+        uint256 withdrawAmount = 0.7293 ether;
+        vm.prank(owner);
+        expectWithdrawalEvent(owner, withdrawAmount);
+        meth.withdrawTo(recipient, withdrawAmount);
+
+        assertEq(meth.balanceOf(owner), startBal - withdrawAmount);
+        assertEq(owner.balance, 0 ether);
+        assertEq(recipient.balance, withdrawAmount);
+    }
+
     function test_fuzzingWithdrawFromFiniteAllowance(
         address operator,
         address owner,
         uint256 startAmount,
         uint256 withdrawAmount,
         uint256 allowance
-    ) public acceptsETH(operator) {
+    ) public {
+        assumePayable(operator);
         vm.assume(operator != address(meth));
         startAmount = bound(startAmount, 0, type(uint128).max);
         allowance = bound(allowance, 0, MIN_INF_ALLOWANCE - 1);
@@ -207,7 +261,8 @@ contract METH_WETHTest is Test, METHBaseTest {
 
         vm.prank(owner);
         meth.approve(operator, allowance);
-        _grantMeth(owner, startAmount);
+
+        dealMeth(owner, startAmount);
 
         uint256 prevBal = operator.balance;
 
@@ -226,7 +281,8 @@ contract METH_WETHTest is Test, METHBaseTest {
         uint256 startAmount,
         uint256 withdrawAmount,
         uint256 allowance
-    ) public acceptsETH(operator) {
+    ) public {
+        assumePayable(operator);
         vm.assume(operator != address(meth));
 
         startAmount = bound(startAmount, 0, type(uint128).max);
@@ -235,7 +291,7 @@ contract METH_WETHTest is Test, METHBaseTest {
 
         vm.prank(owner);
         meth.approve(operator, allowance);
-        _grantMeth(owner, startAmount);
+        dealMeth(owner, startAmount);
         assertEq(meth.balanceOf(owner), startAmount, "balance setup failed");
 
         uint256 prevBal = operator.balance;
@@ -351,15 +407,17 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(meth.allowance(owner, spender), 0);
     }
 
+    function dealMeth(address to, uint256 amount) internal {
+        uint256 balBefore = __methDealer.balance;
+        hoax(__methDealer, amount);
+        meth.depositTo{value: amount}(to);
+        vm.deal(__methDealer, balBefore);
+    }
+
     function _loadWord(bytes memory _bytes, uint256 _offset) internal pure returns (uint256 word) {
         assembly {
             word := mload(add(_bytes, _offset))
         }
-    }
-
-    function _grantMeth(address recipient, uint256 amount) internal {
-        hoax(giver, amount);
-        meth.depositTo{value: amount}(recipient);
     }
 
     function min(uint256 x, uint256 y) internal pure returns (uint256) {
