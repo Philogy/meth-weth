@@ -171,40 +171,39 @@
     // -- Update `from` Balance.
     sload              // [has_error, from, amount, to, amount, from.bal]
     dup3               // [has_error, from, amount, to, amount, from.bal, to]
-    swap6              // [to, from, amount, to, amount, from.bal, has_error]
-    dup2               // [to, from, amount, to, amount, from.bal, has_error, from.bal]
-    dup4               // [to, from, amount, to, amount, from.bal, has_error, from.bal, amount]
-    gt                 // [to, from, amount, to, amount, from.bal, has_error, amount > from.bal]
-    or                 // [to, from, amount, to, amount, from.bal, has_error']
-    empty_revert jumpi // [to, from, amount, to, amount, from.bal]
-    sub                // [to, from, amount, to, from.bal']
-    dup4               // [to, from, amount, to, from.bal', from]
-    sstore             // [to, from, amount, to]
+    swap6              // [to,        from, amount, to, amount, from.bal, has_error]
+    dup2               // [to,        from, amount, to, amount, from.bal, has_error, from.bal]
+    dup4               // [to,        from, amount, to, amount, from.bal, has_error, from.bal, amount]
+    gt                 // [to,        from, amount, to, amount, from.bal, has_error, amount > from.bal]
+    or                 // [to,        from, amount, to, amount, from.bal, has_error']
+    empty_revert jumpi // [to,        from, amount, to, amount, from.bal]
+    sub                // [to,        from, amount, to, from.bal']
+    dup4               // [to,        from, amount, to, from.bal', from]
+    sstore             // [to,        from, amount, to]
     // -- Update `to` Balance.
-    sload              // [to, from, amount, to.bal]
-    dup2               // [to, from, amount, to.bal, amount]
-    add                // [to, from, amount, to.bal']
-    dup4               // [to, from, amount, to.bal', to]
-    sstore             // [to, from, amount]
+    sload              // [to,        from, amount, to.bal]
+    dup2               // [to,        from, amount, to.bal, amount]
+    add                // [to,        from, amount, to.bal']
+    dup4               // [to,        from, amount, to.bal', to]
+    sstore             // [to,        from, amount]
     _EMIT_TRANSFER(<z0>, <word_size>)
     //                    []
     // returns:           []
 }
 
 #define macro _WITHDRAW_ALL(z0) = takes(0) returns(1) {
-    // takes:     []
+    // takes:                 []
     // -- Update balance.
-    caller     // [caller]
-    sload      // [caller.bal]
-    <z0>       // [caller.bal, 0]
-    caller     // [caller.bal, 0, caller]
-    sstore     // [caller.bal]
+    caller                 // [caller]
+    sload                  // [caller.bal]
+    <z0>                   // [caller.bal, 0]
+    caller                 // [caller.bal, 0, caller]
+    sstore                 // [caller.bal]
     // -- Emit event.
-    caller     // [caller.bal, caller]
-    dup2       // [caller.bal, caller, caller.bal]
-    _EMIT_WITHDRAWAL(<z0>)
-    //            [caller.bal]
-    // returns:   [caller.bal]
+    caller                 // [caller.bal, caller]
+    dup2                   // [caller.bal, caller, caller.bal]
+    _EMIT_WITHDRAWAL(<z0>) // [caller.bal]
+    // returns:               [caller.bal]
 }
 
 /// @dev Expects msize to be 0-1 words.
@@ -507,14 +506,15 @@
 #define macro _WITHDRAW_FROM_START(z0) = takes(1) returns(0) {
     // takes:                         [no_error]
 
-    // -- Initial stack setup.
+    // -- Initial stack setup and param load.
     <z0> <z0> <z0>                 // [no_error, 0, 0, 0]
     0x24 calldataload              // [no_error, 0, 0, 0, amount]
     0x10 _LOAD_ADDRESS()           // [no_error, 0, 0, 0, amount, from]
     dup1                           // [no_error, 0, 0, 0, amount, from, from]
-    // -- Allowance load & check.
+    // -- Allowance load (branches to `withdrawFrom_inf_allow` if allowance infinite).
     _GET_ALLOWANCE(<z0>, withdrawFrom_inf_allow)
     //                                [no_error,  0, 0, 0, amount, from, allowance_slot, allowance]
+    // -- Check allowance (continues here if allowance finite).
     swap7                          // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error]
     dup8                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance]
     dup5                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance, amount]
@@ -711,7 +711,7 @@
     // -- Fixed mask for lower bits.
     [S_COVER]           // [selector, unique_sel_bits, sel_cover]
     or                  // [selector, jump_dest]
-    jump             // @> [selector]
+    jump                // [selector]
 }
 
 ////////////////////////////////////////////////////////////////
@@ -1090,7 +1090,7 @@
     dest_0xa6: __NO_MATCH()
     dest_0xa7: __NO_MATCH()
     dest_0xa8: __NO_MATCH()
-    dest_0xa9: 
+    dest_0xa9:
         // 0xa9059cbb
         __FUNC_SIG(transfer)
         INVALID_NON_PAYABLE()
