@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.15;
+pragma solidity 0.8.19;
 
 import {IMETH} from "../../src/interfaces/IMETH.sol";
 import {IWETH9} from "../../src/interfaces/IWETH9.sol";
