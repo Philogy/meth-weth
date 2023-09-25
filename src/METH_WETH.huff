@@ -440,7 +440,7 @@
     add                        // [to, to.bal']
     dup2                       // [to, to.bal', to]
     sstore                     // [to]
-    _EMIT_DEPOSIT(<z0>) // []
+    _EMIT_DEPOSIT(<z0>)        // []
     stop                       // [] -- end
 }
 
