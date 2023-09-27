@@ -57,6 +57,14 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(decimals, 18);
     }
 
+    function testRequireReverts() public {
+        bytes memory methCode = address(meth).code;
+        assertEq(uint8(methCode[0x7f]), 0x5B); // JUMPDEST
+        assertEq(uint8(methCode[0x80]), 0x3D); // RETURNDATASIZE
+        assertEq(uint8(methCode[0x81]), 0x3D); // RETURNDATASIZE
+        assertEq(uint8(methCode[0x82]), 0xFD); // REVERT
+    }
+
     function test_fuzzingDeposit(address owner, uint128 amount) public {
         vm.deal(owner, amount);
         vm.prank(owner);

@@ -22,9 +22,9 @@
   0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000214d6178696d616c6c7920456666696369656e74205772617070656420457468657200000000000000000000000000000000000000000000000000000000000000
 }
 // =================== Symbol ====================
-// symbol.length ++ "METH"
 #define constant MAX_SYMBOL_LEN = 0x1f
 #define constant SYMBOL_OFFSET = 0x2591
+// symbol.length ++ "METH"
 #define constant PACKED_SYMBOL = 0x044d455448000000000000000000000000000000000000000000000000000000
 
 // 1 (padding) + 1 (decimals) + 32 (packed symbol) + 128 (abi-encoded name)
@@ -33,7 +33,7 @@
 ////////////////////////////////////////////////////////////////
 //                      OTHER CONSTANTS                       //
 ////////////////////////////////////////////////////////////////
-/// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and this addresses.
+/// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and `this` addresses.
 #define constant LOST_N_FOUND = 0x1212121212121212121212121212121212121212
 
 ////////////////////////////////////////////////////////////////
@@ -58,6 +58,19 @@
 
     lt              // [!a && b]
     // returns:        [res]
+}
+
+#define macro _REQUIRE_NOT() = takes(1) returns(0) {
+    // takes:              [has_error]
+    /// @dev Use literal instead of label (Huff doesn't support 1-byte pushes for labels yet)
+    0x7f jumpi          // []
+    // returns:            []
+}
+
+#define macro _REVERT() = takes(0) returns(0) {
+    returndatasize       // [0]
+    returndatasize       // [0, 0]
+    revert               // [] -- end
 }
 
 /**
@@ -683,14 +696,12 @@
 #define macro __PAYABLE_SELECTOR_CHECK() = takes(2) returns(0) {
     // takes:             [msg.sig, selector]
     sub                // [selector != msg.sig]
-    empty_revert jumpi // []
+    _REQUIRE_NOT()     // [] -- end
     // returns:           []
 }
 
 #define macro __NO_MATCH() = takes(0) returns(0) {
-    returndatasize  // [0]
-    returndatasize  // [0, 0]
-    revert          // []
+    _REVERT()
     // Padding to make sure block is 64 bytes large post compilation.
     /* padding (60) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                        stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
@@ -917,7 +928,7 @@
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT_AND_APPROVE(returndatasize)
         /// @dev Selectors 0x29000000 - 0x29ffffff will exceptionally revert.
-        /* padding (10) */ stop stop stop stop stop stop stop stop stop stop
+        /* padding (11) */ stop stop stop stop stop stop stop stop stop stop stop
     dest_0x2a: __NO_MATCH()
     dest_0x2b: __NO_MATCH()
     dest_0x2c: __NO_MATCH()
@@ -1123,7 +1134,7 @@
         __FUNC_SIG(depositTo)
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT_TO(returndatasize)
-        /* padding (00) */
+        /* padding (01) */ stop
     dest_0xb8: __NO_MATCH()
     dest_0xb9: __NO_MATCH()
     dest_0xba: __NO_MATCH()
@@ -1161,7 +1172,7 @@
         __FUNC_SIG(deposit)
         __PAYABLE_SELECTOR_CHECK()
         DEPOSIT(returndatasize)
-        /* padding (05) */ stop stop stop stop stop
+        /* padding (06) */ stop stop stop stop stop stop
     dest_0xd1: __NO_MATCH()
     dest_0xd2: __NO_MATCH()
     dest_0xd3: __NO_MATCH()
@@ -1215,10 +1226,7 @@
     dest_0xfc: __NO_MATCH()
     dest_0xfd: __NO_MATCH()
     dest_0xfe: __NO_MATCH()
-    empty_revert:
-        returndatasize
-        returndatasize
-        revert
+    empty_revert: _REVERT()
 
     _TRANSFER_FROM_INF_END(callvalue)
     _WITHDRAW_FROM_END(callvalue)
