@@ -103,6 +103,10 @@ contract ReferenceMETH is IMETH {
         }
     }
 
+    function fromOld(address to) external {
+        assert(false);
+    }
+
     function totalSupply() external view returns (uint256) {
         return address(this).balance;
     }

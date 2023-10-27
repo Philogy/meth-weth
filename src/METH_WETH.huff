@@ -35,6 +35,10 @@
 ////////////////////////////////////////////////////////////////
 /// @dev The only special privileges the recovery address should have is the ability to sweep funds from the zero and `this` addresses.
 #define constant LOST_N_FOUND = 0x1212121212121212121212121212121212121212
+/// @dev Slot for reserves of "old" WETH e.g. WETH9
+#define constant RESERVES_SLOT = 0x010000000000000000000000000000000000000000
+/// @dev Placeholder (keccak256("meth-weth.old-weth.address")[12:32])
+#define constant OLD_WETH = 0x5d9518e067e84d23aa465f6aeb5173c9bd1a72ea
 
 ////////////////////////////////////////////////////////////////
 //                       UTILITY MACROS                       //
@@ -47,7 +51,7 @@
  * if not a lone bit.
  * @return:stack res A 0 or 1 depending on whether the expression is true.
  */
-#define macro _NOTA_AND_B() = takes(2) returns(1) {
+#define macro _NOT_A_AND_B() = takes(2) returns(1) {
     // takes:          [b, a]
 
     // Need (A == 0)  &&   B:
@@ -67,9 +71,16 @@
     // returns:            []
 }
 
-#define macro _REVERT() = takes(0) returns(0) {
-    returndatasize       // [0]
-    returndatasize       // [0, 0]
+#define macro _REQUIRE(z0) = takes(1) returns(0) {
+    // takes:              [cond]
+    no_error jumpi      // []
+        _REVERT(<z0>)   // [] -- end
+    no_error:           // []
+    // returns:            []
+}
+
+#define macro _REVERT(z0) = takes(0) returns(0) {
+    <z0> <z0>            // [0, 0]
     revert               // [] -- end
 }
 
@@ -78,8 +89,8 @@
  * @param:stack addr_offset The parameters offset in calldata (`0x10 + param_index * 0x20`)
  * @return:stack addr The sanitized address.
  */
-#define macro _LOAD_ADDRESS() = takes(1) returns(1) {
-    // takes:             [addr_offset]
+#define macro _LOAD_ADDRESS(offset) = takes(0) returns(1) {
+    <offset>           // [addr_offset]
     calldataload       // [shifted_addr]
     0x60               // [shifted_addr, 96]
     shr                // [addr]
@@ -222,7 +233,7 @@
 /// @dev Expects msize to be 0-1 words.
 #define macro _APPROVE(z0) = takes(0) returns(0) {
     0x24 calldataload      // [amount]
-    0x10 _LOAD_ADDRESS()   // [amount, spender]
+    _LOAD_ADDRESS(0x10)    // [amount, spender]
 
     // -- Emit Event.
     dup2                   // [amount, spender, amount]
@@ -351,7 +362,7 @@
 }
 
 #define macro BALANCE_OF(z0) = takes(0) returns(0) {
-    0x10 _LOAD_ADDRESS()      // [account]
+    _LOAD_ADDRESS(0x10)       // [account]
     sload                     // [account.bal]
     _RETURN_WORD(<z0>, msize) // [] -- end
 }
@@ -382,7 +393,7 @@
     // takes:                 [has_error]
     caller                 // [has_error, caller]
     0x24 calldataload      // [has_error, caller, amount]
-    0x10 _LOAD_ADDRESS()   // [has_error, caller, amount, to]
+    _LOAD_ADDRESS(0x10)    // [has_error, caller, amount, to]
     dup2                   // [has_error, caller, amount, to, amount]
     caller                 // [has_error, caller, amount, to, amount, caller]
     _TRANSFER(<z0>, msize) // []
@@ -407,9 +418,9 @@
 
 #define macro TRANSFER_FROM(z0) = takes(1) returns(0) {
     // takes:                   [has_error]
-    0x10 _LOAD_ADDRESS()     // [has_error, from]
+    _LOAD_ADDRESS(0x10)      // [has_error, from]
     0x44 calldataload        // [has_error, from, amount]
-    0x30 _LOAD_ADDRESS()     // [has_error, from, amount, to]
+    _LOAD_ADDRESS(0x30)     // [has_error, from, amount, to]
     // -- Get allowance slot & load.
     dup3                     // [has_error, from, amount, to, from]
     _GET_ALLOWANCE(<z0>, transferFrom_inf_allow)
@@ -446,7 +457,7 @@
 
 #define macro DEPOSIT_TO(z0) = takes(0) returns(0) {
     // takes:                     []
-    0x10 _LOAD_ADDRESS()       // [to]
+    _LOAD_ADDRESS(0x10)        // [to]
     dup1                       // [to, to]
     sload                      // [to, to.bal]
     callvalue                  // [to, to.bal, callvalue]
@@ -510,7 +521,7 @@
     dup7                        // [from_bal, 0, 0, 0, amount, from, no_error, from_bal]
     dup4                        // [from_bal, 0, 0, 0, amount, from, no_error, from_bal, amount]
     gt                          // [from_bal, 0, 0, 0, amount, from, no_error, amount > from_bal]
-    _NOTA_AND_B()               // [from_bal, 0, 0, 0, amount, from, no_error']
+    _NOT_A_AND_B()              // [from_bal, 0, 0, 0, amount, from, no_error']
     complete_withdrawFrom jumpi // [from_bal, 0, 0, 0, amount, from]
     <z0> <z0>                   // [from_bal, 0, 0, 0, amount, from, 0, 0]
     revert                      // [from_bal, 0, 0, 0, amount, from]
@@ -522,7 +533,7 @@
     // -- Initial stack setup and param load.
     <z0> <z0> <z0>                 // [no_error, 0, 0, 0]
     0x24 calldataload              // [no_error, 0, 0, 0, amount]
-    0x10 _LOAD_ADDRESS()           // [no_error, 0, 0, 0, amount, from]
+    _LOAD_ADDRESS(0x10)            // [no_error, 0, 0, 0, amount, from]
     dup1                           // [no_error, 0, 0, 0, amount, from, from]
     // -- Allowance load (branches to `withdrawFrom_inf_allow` if allowance infinite).
     _GET_ALLOWANCE(<z0>, withdrawFrom_inf_allow)
@@ -532,7 +543,7 @@
     dup8                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance]
     dup5                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance, amount]
     gt                             // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, amount > allowance]
-    _NOTA_AND_B()                  // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error']
+    _NOT_A_AND_B()                 // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error']
     swap7                          // [no_error', 0, 0, 0, amount, from, allowance_slot, allowance]
     // -- Update allowance.
     dup4                           // [no_error', 0, 0, 0, amount, from, allowance_slot, allowance, amount]
@@ -594,7 +605,7 @@
     // -- Initial stack setup.
     <z0> <z0> <z0>              // [has_error, 0, 0, 0]
     0x44 calldataload           // [has_error, 0, 0, 0, amount]
-    0x10 _LOAD_ADDRESS()        // [has_error, 0, 0, 0, amount, from]
+    _LOAD_ADDRESS(0x10)         // [has_error, 0, 0, 0, amount, from]
     dup1                        // [has_error, 0, 0, 0, amount, from, from]
     // -- Allowance load & check.
     _GET_ALLOWANCE(<z0>, withdrawFromTo_inf_allow)
@@ -652,6 +663,50 @@
     stop
 }
 
+#define macro FROM_OLD(z0) = takes(1) returns(0) {
+    // takes:                 [has_error]
+    // -- Call `oldWeth.balanceOf(address(this))`
+    __FUNC_SIG(balanceOf)  // [has_error, balanceOf_sel]
+    msize                  // [has_error, balanceOf_sel, 0x00]
+    mstore                 // [has_error]
+    msize                  // [has_error, 0x20]
+    address                // [has_error, 0x20, this]
+    msize                  // [has_error, 0x20, this, 0x20]
+    mstore                 // [has_error]
+    <z0>                   // [has_error, 0x20, 0x00]
+    0x24                   // [has_error, 0x20, 0x00, 0x04]
+    0x1c                   // [has_error, 0x20, 0x00, 0x04, 0x1c]
+    [OLD_WETH]             // [has_error, 0x20, 0x00, 0x04, 0x1c, old_weth]
+    gas staticcall         // [has_error, suc]
+    gt                     // [no_error]
+    _REQUIRE(<z0>)         // []
+    <z0> mload             // [bal]
+    // -- Load reserves and calculate amount
+    [RESERVES_SLOT]        // [bal, reserve_slot]
+    _LOAD_ADDRESS(0x10)    // [bal, reserve_slot, to]
+    dup2                   // [bal, reserve_slot, to, reserve_slot]
+    sload                  // [bal, reserve_slot, to, reserves]
+    dup4                   // [bal, reserve_slot, to, reserves, bal]
+    sub                    // [bal, reserve_slot, to, amount]
+    // -- Update to balance
+    dup2                   // [bal, reserve_slot, to, amount, to]
+    sload                  // [bal, reserve_slot, to, amount, to_bal]
+    dup2                   // [bal, reserve_slot, to, amount, to_bal, amount]
+    add                    // [bal, reserve_slot, to, amount, to_bal']
+    dup3                   // [bal, reserve_slot, to, amount, to_bal', to]
+    sstore                 // [bal, reserve_slot, to, amount]
+    // -- Emit `MintFromOld` event
+    <z0>                   // [bal, reserve_slot, to, amount, 0]
+    mstore                 // [bal, reserve_slot, to]
+    __EVENT_HASH(MintFromOld)
+    //                        [bal, reserve_slot, to, MintFromOld_sig]
+    0x10 dup1              // [bal, reserve_slot, to, MintFromOld_sig, 16, 16]
+    log2                   // [bal, reserve_slot]
+    // -- Save new reserves
+    sstore                 // []
+    stop                   // [] -- end
+}
+
 ////////////////////////////////////////////////////////////////
 //               FUNCTION DISPATCHER COMPONENTS               //
 ////////////////////////////////////////////////////////////////
@@ -680,7 +735,7 @@
     // takes:                [selector, msg.sig]
     eq                    // [selector == msg.sig]
     callvalue             // [selector == msg.sig, msg.value]
-    _NOTA_AND_B()         // [no_error]
+    _NOT_A_AND_B()        // [no_error]
     // returns:              [no_error]
 }
 
@@ -701,7 +756,7 @@
 }
 
 #define macro __NO_MATCH() = takes(0) returns(0) {
-    _REVERT()
+    _REVERT(returndatasize)
     // Padding to make sure block is 64 bytes large post compilation.
     /* padding (60) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
                        stop stop stop stop stop stop stop stop stop stop stop stop stop stop stop
@@ -849,9 +904,16 @@
         DEPOSIT(returndatasize)
         /* padding (10) */ stop stop stop stop stop stop stop stop stop stop
     dest_0x01: __NO_MATCH()
-    dest_0x02: __NO_MATCH()
-    dest_0x03: __NO_MATCH()
-    dest_0x04: __NO_MATCH()
+    dest_0x02:
+        // 0x023809ba
+        __FUNC_SIG(fromOld)
+        INVALID_NON_PAYABLE()
+        FROM_OLD(callvalue)
+        /// @dev Selectors 0x03000000 - 0x03ffffff will exceptionally revert.
+        /* padding (54) */ stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop stop stop
+                           stop stop stop stop stop stop stop stop stop stop stop stop
     dest_0x05: __NO_MATCH()
     dest_0x06:
         // 0x06fdde03
@@ -1226,7 +1288,7 @@
     dest_0xfc: __NO_MATCH()
     dest_0xfd: __NO_MATCH()
     dest_0xfe: __NO_MATCH()
-    empty_revert: _REVERT()
+    empty_revert: _REVERT(returndatasize)
 
     _TRANSFER_FROM_INF_END(callvalue)
     _WITHDRAW_FROM_END(callvalue)

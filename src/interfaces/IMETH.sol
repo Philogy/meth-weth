@@ -14,15 +14,15 @@ interface IMETH is IERC20Metadata {
 
     function totalSupply() external view returns (uint256);
 
-    function balanceOf(address _owner) external view returns (uint256);
+    function balanceOf(address owner) external view returns (uint256);
 
-    function allowance(address _owner, address _spender) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
-    function transfer(address _to, uint256 _amount) external;
+    function transfer(address to, uint256 amount) external;
 
-    function transferFrom(address _from, address _to, uint256 _amount) external;
+    function transferFrom(address from, address to, uint256 amount) external;
 
-    function approve(address _spender, uint256 _amount) external;
+    function approve(address spender, uint256 amount) external;
 
     ////////////////////////////////////////////////////////////////
     //                       WRAPPED ETHER                        //
@@ -32,27 +32,31 @@ interface IMETH is IERC20Metadata {
 
     function deposit() external payable;
 
-    function depositTo(address _to) external payable;
+    function depositTo(address to) external payable;
 
-    function depositAndApprove(address _spender, uint256 _amount) external payable;
+    function depositAndApprove(address spender, uint256 amount) external payable;
 
     event Withdrawal(address indexed from, uint256 amount);
 
-    function withdraw(uint256 _amount) external;
+    function withdraw(uint256 amount) external;
 
-    function withdrawTo(address _to, uint256 _amount) external;
+    function withdrawTo(address to, uint256 amount) external;
 
     function withdrawAll() external;
 
     function withdrawAllTo(address) external;
 
-    function withdrawFrom(address _from, uint256 _amount) external;
+    function withdrawFrom(address from, uint256 amount) external;
 
-    function withdrawFromTo(address _from, address _to, uint256 _amount) external;
+    function withdrawFromTo(address from, address to, uint256 amount) external;
 
     /*//////////////////////////////////////////////////////////////
                             UTILITY
     //////////////////////////////////////////////////////////////*/
 
     function sweepLost() external;
+
+    function fromOld(address to) external;
+
+    event MintFromOld(address indexed to, uint256 amount);
 }

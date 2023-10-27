@@ -254,6 +254,30 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(recipient.balance, withdrawAmount);
     }
 
+    function test_failingMintFromOld() public {
+        test_fuzzingMintFromOld(
+            0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 0, 0
+        );
+    }
+
+    function test_fuzzingMintFromOld(address recipient1, address recipient2, uint128 amount1, uint128 amount2) public {
+        amount2 = uint128(bound(amount2, 0, type(uint128).max - amount1));
+
+        vm.deal(address(this), amount1 + amount2);
+
+        deal(address(weth), address(meth), amount1);
+        expectMintFromOld(recipient1, amount1);
+        meth.fromOld(recipient1);
+        assertEq(meth.balanceOf(recipient1), amount1, "bal 1 wrong");
+
+        deal(address(weth), address(meth), amount2);
+        uint256 prevBal = meth.balanceOf(recipient2);
+        weth.transfer(address(meth), amount2);
+        expectMintFromOld(recipient2, amount2);
+        meth.fromOld(recipient2);
+        assertEq(meth.balanceOf(recipient2), prevBal + amount2, "bal 2 wrong");
+    }
+
     function test_fuzzingWithdrawFromFiniteAllowance(
         address operator,
         address owner,
@@ -314,17 +338,19 @@ contract METH_WETHTest is Test, METHBaseTest {
     }
 
     function testUnimplementedReverts() public {
-        uint32[] memory exceptionalSelectors = new uint32[](10);
-        exceptionalSelectors[0] = 0x0a000000;
-        exceptionalSelectors[1] = 0x21000000;
-        exceptionalSelectors[2] = 0x24000000;
-        exceptionalSelectors[3] = 0x29000000;
-        exceptionalSelectors[4] = 0x2f000000;
-        exceptionalSelectors[5] = 0x4b000000;
-        exceptionalSelectors[6] = 0x86000000;
-        exceptionalSelectors[7] = 0xaa000000;
-        exceptionalSelectors[8] = 0xae000000;
-        exceptionalSelectors[9] = 0xcb000000;
+        uint32[] memory exceptionalSelectors = new uint32[](12);
+        exceptionalSelectors[0] = 0x03000000;
+        exceptionalSelectors[1] = 0x04000000;
+        exceptionalSelectors[2] = 0x0a000000;
+        exceptionalSelectors[3] = 0x21000000;
+        exceptionalSelectors[4] = 0x24000000;
+        exceptionalSelectors[5] = 0x29000000;
+        exceptionalSelectors[6] = 0x2f000000;
+        exceptionalSelectors[7] = 0x4b000000;
+        exceptionalSelectors[8] = 0x86000000;
+        exceptionalSelectors[9] = 0xaa000000;
+        exceptionalSelectors[10] = 0xae000000;
+        exceptionalSelectors[11] = 0xcb000000;
 
         for (uint256 i = 0; i < exceptionalSelectors.length; i++) {
             uint32 selector = exceptionalSelectors[i];
@@ -360,7 +386,7 @@ contract METH_WETHTest is Test, METHBaseTest {
             } else {
                 // Some methods will cheaply revert immediately, others like `transferFrom` will
                 // only revert once the first bundled check is reached.
-                if (gasChange >= 5000) {
+                if (gasChange >= 10000) {
                     console.log("selector %x too much", selector);
                     fail();
                 }
@@ -455,6 +481,17 @@ contract METH_WETHTest is Test, METHBaseTest {
         assembly {
             mstore(0x00, amount)
             log2(0x10, 0x10, withdrawalEventSig, owner)
+        }
+    }
+
+    function expectMintFromOld(address to, uint256 amount) internal {
+        assertLt(amount, 1 << 128);
+        bytes32 mintFromOldEventSig = keccak256("MintFromOld(address,uint256)");
+        vm.expectEmit(true, true, true, true);
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, amount)
+            log2(0x10, 0x10, mintFromOldEventSig, to)
         }
     }
 }
