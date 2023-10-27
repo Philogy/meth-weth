@@ -2,7 +2,8 @@ from common import *
 
 
 def test_dispatcher_arrival_block_offset():
-    blocks: list[Fn | str | None] = [None] * 256
+    print(f'FUNCS: {FUNCS}')
+    blocks: list[Fn | str | None] = [None] * TOTAL_BLOCKS
 
     # Check that functions don't intersect
     for i, f in enumerate(FUNCS):
@@ -31,14 +32,23 @@ def test_dispatcher_arrival_block_offset():
             assert code[offset] != JUMPDEST, f'Continuation of {val} at {offset} is a JUMPDEST'
         else:
             last_fn_repr = ', start' if last is None else f', last fn: {last.name} @ 0x{last.selector[0]:02x}'
+            desc = 'no_match' if val is None else 'function'
             assert code[offset] == JUMPDEST,\
-                f'Missing JUMPDEST at valid block 0x{i:02x}; add {find_nearest_jumpdests(code, offset)} padding for nearest ({offset}{last_fn_repr})'
-            offset += 1
-            if val is None:
-                assert code[offset:offset+len(NO_MATCH)] == NO_MATCH,\
-                    f'Invalid function arrival 0x{i:02x} missing NO_MATCH ({bytes(NO_MATCH).hex()}), found {code[offset:offset+len(NO_MATCH)].hex()}... instead'
-            else:
+                f'Missing JUMPDEST at {desc} block 0x{i:02x}; add {find_nearest_jumpdests(code, offset)} padding to 0x{i-1:02x} ({offset}{last_fn_repr})'
+            if isinstance(val, Fn):
                 last = val
+
+    # Check for the __NO_MATCH() reverting block sequences
+    assert blocks[TOTAL_BLOCKS - 1] is None,\
+        f'Last block 0x{TOTAL_BLOCKS - 1:02x} expected to be empty no match'
+    for i, val in enumerate(blocks[:TOTAL_BLOCKS - 1]):
+        offset = block_offset(i)
+        if val is None:
+            assert code[offset:offset+BLOCK_SIZE] == NO_MATCH,\
+                f'Invalid function arrival 0x{i:02x} missing NO_MATCH ({bytes(NO_MATCH[:10]).hex()}...), found {code[offset:offset+len(NO_MATCH)].hex()} instead'
+        elif isinstance(val, Fn):
+            assert code[offset:offset+NO_MATCH_CORE_LEN] != NO_MATCH[: NO_MATCH_CORE_LEN],\
+                f'Found core of no match sequence while expecting function for {val.sig} @ 0x{i:02x}'
 
 
 def test_no_duplicate_names():

@@ -18,7 +18,8 @@ JUMPDEST = 0x5b
 RETURNDATASIZE = 0x3d
 REVERT = 0xfd
 
-NO_MATCH = bytes([RETURNDATASIZE, RETURNDATASIZE, REVERT])
+NO_MATCH_CORE_LEN = 3
+NO_MATCH = bytes([JUMPDEST, RETURNDATASIZE, RETURNDATASIZE, REVERT] + [0] * 60)
 
 
 def _get_sigs() -> list[str]:
@@ -35,8 +36,12 @@ def _get_sigs() -> list[str]:
         return list(map(sig_from_func, funcs))
 
 
+BLOCK_SIZE = 64
+TOTAL_BLOCKS = 256
+
+
 def block_offset(index: int) -> int:
-    return 63 + index * 64
+    return (BLOCK_SIZE - 1) + index * BLOCK_SIZE
 
 
 def compile_meth(runtime: bool) -> bytes:
@@ -81,6 +86,7 @@ def _get_func_size(name):
         'transfer': 2,
         'sweepLost': 2,
         'withdrawAllTo': 2,
+        'fromOld': 3
     }.get(name, 1)
 
 
