@@ -21,7 +21,7 @@
 #define function withdrawFrom(address, uint256) nonpayable returns ()
 #define function withdrawFromTo(address, address, uint256) nonpayable returns ()
 #define function sweepLost() nonpayable returns ()
-#define function fromOld(address) nonpayable returns ()
+#define function depositWithOldTo(address) nonpayable returns ()
 // =================== Events ====================
 #define event Transfer(address indexed, address indexed, uint256)
 #define event Deposit(address indexed, uint256)
