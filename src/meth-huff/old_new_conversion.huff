@@ -1,0 +1,69 @@
+/// @dev Slot for reserves of "old" WETH e.g. WETH9
+#define constant OLD_RESERVES_SLOT = 0x010000000000000000000000000000000000000000
+/// @dev Placeholder (keccak256("meth-weth.old-weth.address")[12:32])
+#define constant OLD_WETH = 0x5d9518e067e84d23aa465f6aeb5173c9bd1a72ea
+
+#define macro DEPOSIT_WITH_OLD_TO(z0) = takes(1) returns(0) {
+    // takes:                       [has_error]
+    // -- Call `oldWeth.balanceOf(address(this))`
+    __FUNC_SIG(balanceOf)        // [has_error, balanceOf_sel]
+    msize                        // [has_error, balanceOf_sel, 0x00]
+    mstore                       // [has_error]
+    msize                        // [has_error, 0x20]
+    address                      // [has_error, 0x20, this]
+    msize                        // [has_error, 0x20, this, 0x20]
+    mstore                       // [has_error]
+    <z0>                         // [has_error, 0x20, 0x00]
+    0x24                         // [has_error, 0x20, 0x00, 0x04]
+    0x1c                         // [has_error, 0x20, 0x00, 0x04, 0x1c]
+    [OLD_WETH]                   // [has_error, 0x20, 0x00, 0x04, 0x1c, old_weth]
+    gas staticcall               // [has_error, suc]
+    // -- Check error & call success.
+    _A_AND_NOT_B()               // [no_error]
+    _REQUIRE(<z0>, no_error)     // []
+    no_error:
+    <z0> mload                   // [bal]
+    // -- Load reserves and calculate amount
+    [OLD_RESERVES_SLOT]          // [bal, reserve_slot]
+    _LOAD_ADDRESS(0x10)          // [bal, reserve_slot, to]
+    dup2                         // [bal, reserve_slot, to, reserve_slot]
+    sload                        // [bal, reserve_slot, to, reserves]
+    dup4                         // [bal, reserve_slot, to, reserves, bal]
+    sub                          // [bal, reserve_slot, to, amount]
+    // -- Update to balance
+    dup2                         // [bal, reserve_slot, to, amount, to]
+    sload                        // [bal, reserve_slot, to, amount, to_bal]
+    dup2                         // [bal, reserve_slot, to, amount, to_bal, amount]
+    add                          // [bal, reserve_slot, to, amount, to_bal']
+    dup3                         // [bal, reserve_slot, to, amount, to_bal', to]
+    sstore                       // [bal, reserve_slot, to, amount]
+    // -- Emit `DepositWithOld` event
+    <z0>                         // [bal, reserve_slot, to, amount, 0]
+    mstore                       // [bal, reserve_slot, to]
+    __EVENT_HASH(DepositWithOld) // [bal, reserve_slot, to, MintFromOld_sig]
+    0x10 dup1                    // [bal, reserve_slot, to, MintFromOld_sig, 16, 16]
+    log2                         // [bal, reserve_slot]
+    // -- Save new reserves
+    sstore                 // []
+    stop                   // [] -- end
+}
+
+#define macro WITHDRAW_AS_OLD_TO(z0) = takes(1) returns(0) {
+    // takes:                 [has_error]
+    /*
+
+    */
+    jumpdest
+    jumpdest
+    0x0 0x0 revert
+}
+
+#define macro RESERVES_OLD(z0) = takes(0) returns(0) {
+    [OLD_RESERVES_SLOT]    // [reserves_slot]
+    sload                  // [reserves]
+    <z0>                   // [reserves, 0x00]
+    mstore                 // []
+    msize                  // [0x20]
+    <z0>                   // [0x20, 0x00]
+    return                 // [] -- end
+}

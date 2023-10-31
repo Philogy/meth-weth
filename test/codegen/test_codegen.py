@@ -48,7 +48,7 @@ def test_dispatcher_arrival_block_offset():
                 f'Invalid function arrival 0x{i:02x} missing NO_MATCH ({bytes(NO_MATCH[:10]).hex()}...), found {code[offset:offset+len(NO_MATCH)].hex()} instead'
         elif isinstance(val, Fn):
             assert code[offset:offset+NO_MATCH_CORE_LEN] != NO_MATCH[: NO_MATCH_CORE_LEN],\
-                f'Found core of no match sequence while expecting function for {val.sig} @ 0x{i:02x}'
+                f'Found core of no match sequence while expecting function for [0x{val.num:08x}] {val.sig} @ 0x{i:02x}'
 
 
 def test_no_duplicate_names():

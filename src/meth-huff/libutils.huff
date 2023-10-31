@@ -1,0 +1,96 @@
+/**
+ * @dev Acts as an alias to `lt(a, b)`. Equivalent but more efficient to `and(iszero(a), b)`.
+ * @param:stack a Value that must be zero for the expression to be true, can be any non-zero value.
+ * @param:stack b Value that must be 0x1 for the expression to be true. Can lead to invalid results
+ * if not a lone bit.
+ * @return:stack res A 0 or 1 depending on whether the expression is true.
+ */
+#define macro _NOT_A_AND_B() = takes(2) returns(1) {
+    // takes:          [b, a]
+
+    // Need (A == 0)  &&   B:
+    //         [=0]   LT  [0] -> 0
+    //         [=0]   LT  [1] -> 1
+    //         [>0]   LT  [0] -> 0
+    //         [>0]   LT  [1] -> 0
+
+    lt              // [!a && b]
+    // returns:        [res]
+}
+
+
+/**
+ * @dev Acts as an alias to `gt(a, b)`. Equivalent but more efficient to `and(a, iszero(b))`.
+ * @param:stack a Value that must be zero for the expression to be true, can be any non-zero value.
+ * @param:stack b Value that must be 0x1 for the expression to be true. Can lead to invalid results
+ * if not a lone bit.
+ * @return:stack res A 0 or 1 depending on whether the expression is true.
+ */
+#define macro _A_AND_NOT_B() = takes(2) returns(1) {
+    // takes:          [b, a]
+
+    // Need (A == 1)  &&  (B == 0):
+    //         [0]    GT  [=0]       -> 0
+    //         [0]    GT  [>0]       -> 0
+    //         [1]    GT  [=0]       -> 1
+    //         [1]    GT  [>0]       -> 0
+
+    gt              // [a && !b]
+    // returns:        [res]
+}
+
+#define macro _REQUIRE_NOT() = takes(1) returns(0) {
+    // takes:                    [has_error]
+    global_empty_revert jumpi // [] -- end / continue
+    // returns:                  []
+}
+
+#define macro _REQUIRE(z0, suc_dest) = takes(1) returns(0) {
+    // takes:              [cond]
+    <suc_dest> jumpi    // []
+        _REVERT(<z0>)   // [] -- end
+    // returns:            []
+}
+
+#define macro _REVERT(z0) = takes(0) returns(0) {
+    <z0> <z0>            // [0, 0]
+    revert               // [] -- end
+}
+
+/**
+ * @dev Pushes a sanitized address from calldata to the stack.
+ * @param:stack addr_offset The parameters offset in calldata (`0x10 + param_index * 0x20`)
+ * @return:stack addr The sanitized address.
+ */
+#define macro _LOAD_ADDRESS(offset) = takes(0) returns(1) {
+    <offset>           // [addr_offset]
+    calldataload       // [shifted_addr]
+    0x60               // [shifted_addr, 96]
+    shr                // [addr]
+    // returns:        // [addr]
+}
+
+#define macro _RETURN_WORD(z0, word_size) = takes(1) returns(0) {
+    // takes:      [x]
+    <z0>        // [x, 0] 
+    mstore      // []
+    <word_size> // [32]
+    <z0>        // [32, 0]
+    return      // []
+}
+
+#define macro _SEND_ETH(z0) = takes(6) returns(0) {
+    // takes:                [0, 0, 0, 0, amount, recipient]
+    gas                   // [0, 0, 0, 0, amount, recipient, gas]
+    call                  // [success]
+    no_revert jumpi       // []
+        returndatasize    // [rdz]
+        <z0> <z0>         // [rdz, 0, 0]
+        returndatacopy    // []
+        returndatasize    // [rdz]
+        <z0>              // [rdz, 0]
+        revert            // [] -- end
+    no_revert:            // []
+    // Stop in `_SEND_ETH` macro to ensure CEI.
+        stop              // [] -- end
+}

@@ -1,0 +1,211 @@
+#include "../interfaces/IMETH.huff"
+
+////////////////////////////////////////////////////////////////
+//             WITHDRAW (AKA UNWRAPPING) METHODS              //
+////////////////////////////////////////////////////////////////
+
+#define macro _EMIT_WITHDRAWAL(z0) = takes(2) returns(0) {
+    // takes:                   [from, amount]
+    <z0>                     // [from, amount, 0]
+    mstore                   // [from]
+    __EVENT_HASH(Withdrawal) // [from, Withdrawal.sig]
+    0x10                     // [from, Withdrawal.sig, 16]
+    dup1                     // [from, Withdrawal.sig, 16, 16]
+    log2                     // []
+    // returns:                 []
+}
+
+#define macro _WITHDRAW_ALL(z0) = takes(0) returns(1) {
+    // takes:                 []
+    // -- Update balance.
+    caller                 // [caller]
+    sload                  // [caller.bal]
+    <z0>                   // [caller.bal, 0]
+    caller                 // [caller.bal, 0, caller]
+    sstore                 // [caller.bal]
+    // -- Emit event.
+    caller                 // [caller.bal, caller]
+    dup2                   // [caller.bal, caller, caller.bal]
+    _EMIT_WITHDRAWAL(<z0>) // [caller.bal]
+    // returns:               [caller.bal]
+}
+
+#define macro _BURN_FROM_CALLER(z0) = takes(5) returns(5) {
+    // takes:             [has_error, 0, 0, 0, amount]
+    dup1               // [has_error, 0, 0, 0, amount, amount]
+    caller             // [has_error, 0, 0, 0, amount, amount, caller]
+    sload              // [has_error, 0, 0, 0, amount, amount, caller.bal]
+    <z0>               // [has_error, 0, 0, 0, amount, amount, caller.bal, 0]
+    swap7              // [0, 0, 0, 0, amount, amount, caller.bal, has_error]
+    dup2               // [0, 0, 0, 0, amount, amount, caller.bal, has_error, caller.bal]
+    dup4               // [0, 0, 0, 0, amount, amount, caller.bal, has_error, caller.bal, amount]
+    gt                 // [0, 0, 0, 0, amount, amount, caller.bal, has_error, amount > caller.bal]
+    or                 // [0, 0, 0, 0, amount, amount, caller.bal, has_error']
+    _REQUIRE_NOT()     // [0, 0, 0, 0, amount, amount, caller.bal]
+    sub                // [0, 0, 0, 0, amount, caller.bal']
+    caller             // [0, 0, 0, 0, amount, caller.bal', caller]
+    sstore             // [0, 0, 0, 0, amount]
+    caller             // [0, 0, 0, 0, amount, caller]
+    dup2               // [0, 0, 0, 0, amount, caller, amount]
+    _EMIT_WITHDRAWAL(<z0>)
+    //                    [0, 0, 0, 0, amount]
+    // returns:           [0, 0, 0, 0, amount]
+}
+
+#define macro WITHDRAW(z0) = takes(1) returns(0) {
+    // takes:                  [has_error]
+    <z0> <z0> <z0>          // [has_error, 0, 0, 0]
+    0x04 calldataload       // [has_error, 0, 0, 0, amount]
+    _BURN_FROM_CALLER(<z0>) // [0, 0, 0, 0, amount]
+    caller                  // [0, 0, 0, 0, amount, caller]
+    _SEND_ETH(<z0>)         // [] -- end
+}
+
+#define macro WITHDRAW_TO(z0) = takes(1) returns(0) {
+    // takes:                  [has_error]
+    <z0> <z0> <z0>          // [has_error, 0, 0, 0]
+    0x24 calldataload       // [has_error, 0, 0, 0, amount]
+    _BURN_FROM_CALLER(<z0>) // [0, 0, 0, 0, amount]
+    0x04 calldataload       // [0, 0, 0, 0, amount, to]
+    _SEND_ETH(<z0>)         // [] -- end
+}
+
+#define macro WITHDRAW_ALL(z0) = takes(0) returns(0) {
+    // takes:                  []
+    <z0> <z0> <z0> <z0>     // [0, 0, 0, 0]
+    _WITHDRAW_ALL(<z0>)     // [0, 0, 0, 0, amount]
+    caller                  // [0, 0, 0, 0, amount, caller]
+    _SEND_ETH(<z0>)         // []
+}
+
+#define macro WITHDRAW_ALL_TO(z0) = takes(0) returns(0) {
+    // takes:                  []
+    // Push zeros before to avoid swaps later.
+    <z0> <z0> <z0> <z0>     // [0, 0, 0, 0]
+    _WITHDRAW_ALL(<z0>)     // [0, 0, 0, 0, amount]
+    0x04 calldataload       // [0, 0, 0, 0, amount, to]
+    _SEND_ETH(<z0>)         // []
+}
+
+#define macro _WITHDRAW_FROM_BAL_CHECK(z0, continue_post_bal_check) = takes(6) returns(0) {
+    // takes:                      [no_error, 0, 0, 0, amount, from]
+    dup1                        // [no_error, 0, 0, 0, amount, from, from]
+    sload                       // [no_error, 0, 0, 0, amount, from, from_bal]
+    swap6                       // [from_bal, 0, 0, 0, amount, from, no_error]
+    dup7                        // [from_bal, 0, 0, 0, amount, from, no_error, from_bal]
+    dup4                        // [from_bal, 0, 0, 0, amount, from, no_error, from_bal, amount]
+    gt                          // [from_bal, 0, 0, 0, amount, from, no_error, amount > from_bal]
+    _NOT_A_AND_B()              // [from_bal, 0, 0, 0, amount, from, no_error']
+    _REQUIRE(
+        <z0>,
+        <continue_post_bal_check>
+    )                           // -- end / -> `check_success_dest`
+}
+
+/// @dev Implementation `withdrawFrom(address,uint256)` split to make its entry point fit within
+/// 64-bytes. Unlike other macros can't extend further because `symbol()` has to be right after.
+#define macro _WITHDRAW_FROM_START(z0, inf_allow_bal_check, continue_post_bal_check) = takes(1) returns(0) {
+    // takes:                         [no_error]
+
+    // -- Initial stack setup and param load.
+    <z0> <z0> <z0>                 // [no_error, 0, 0, 0]
+    0x24 calldataload              // [no_error, 0, 0, 0, amount]
+    _LOAD_ADDRESS(0x10)            // [no_error, 0, 0, 0, amount, from]
+    dup1                           // [no_error, 0, 0, 0, amount, from, from]
+    // -- Allowance load (branches to `withdrawFrom_inf_allow` if allowance infinite).
+    _GET_ALLOWANCE(<z0>, <inf_allow_bal_check>)
+    //                                [no_error,  0, 0, 0, amount, from, allowance_slot, allowance]
+    // -- Check allowance (continues here if allowance finite).
+    swap7                          // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error]
+    dup8                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance]
+    dup5                           // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, allowance, amount]
+    gt                             // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error, amount > allowance]
+    _NOT_A_AND_B()                 // [allowance, 0, 0, 0, amount, from, allowance_slot, no_error']
+    swap7                          // [no_error', 0, 0, 0, amount, from, allowance_slot, allowance]
+    // -- Update allowance.
+    dup4                           // [no_error', 0, 0, 0, amount, from, allowance_slot, allowance, amount]
+    swap1                          // [no_error', 0, 0, 0, amount, from, allowance_slot, amount, allowance]
+    sub                            // [no_error', 0, 0, 0, amount, from, allowance_slot, allowance']
+    swap1                          // [no_error', 0, 0, 0, amount, from, allowance', allowance_slot]
+    sstore                         // [no_error', 0, 0, 0, amount, from]
+    _WITHDRAW_FROM_BAL_CHECK(
+        <z0>,
+        <continue_post_bal_check>
+    )                              // [] -- end / -> `continue_post_bal_check`
+}
+
+#define macro _WITHDRAW_FROM_INF_BAL_CHECK(z0, continue_post_bal_check) = takes(8) returns(0) {
+    // takes:                         [no_error,  0, 0, 0, amount, from, allowance_slot, allowance]
+    pop pop                        // [no_error,  0, 0, 0, amount, from]
+    _WITHDRAW_FROM_BAL_CHECK(
+        <z0>,
+        <continue_post_bal_check>
+    )                              // [] -- end / -> `continue_post_bal_check`
+}
+
+#define macro _WITHDRAW_FROM_END(z0) = takes(6) returns(0) {
+    // takes:                         [from_bal, 0, 0, 0, amount, from]
+    dup2                           // [from_bal, 0, 0, 0, amount, from, amount]
+    <z0>                           // [from_bal, 0, 0, 0, amount, from, amount, 0]
+    swap7                          // [0,        0, 0, 0, amount, from, amount, from_bal]
+    sub                            // [0,        0, 0, 0, amount, from, new_from_bal]
+    dup2                           // [0,        0, 0, 0, amount, from, new_from_bal, from]
+    sstore                         // [0,        0, 0, 0, amount, from]
+    dup2                           // [0,        0, 0, 0, amount, from, amount]
+    _EMIT_WITHDRAWAL(<z0>)         // [0,        0, 0, 0, amount]
+    caller                         // [0,        0, 0, 0, amount, caller]
+    _SEND_ETH(<z0>)                // [] -- end
+}
+
+#define macro _WITHDRAW_FROM_TO_END(z0) = takes(6) returns(0) {
+    // takes:                       [has_error, 0, 0, 0, amount, from]
+    dup1                         // [has_error, 0, 0, 0, amount, from, from]
+    sload                        // [has_error, 0, 0, 0, amount, from, from.bal]
+    swap6                        // [from.bal,  0, 0, 0, amount, from, has_error]
+    dup7                         // [from.bal,  0, 0, 0, amount, from, has_error, from.bal]
+    dup4                         // [from.bal,  0, 0, 0, amount, from, has_error, from.bal, amount]
+    gt                           // [from.bal,  0, 0, 0, amount, from, has_error, amount > from.bal]
+    or                           // [from.bal,  0, 0, 0, amount, from, has_error']
+    _REQUIRE_NOT()               // [from.bal,  0, 0, 0, amount, from]
+    dup2                         // [from.bal,  0, 0, 0, amount, from, amount]
+    <z0>                         // [from.bal,  0, 0, 0, amount, from, amount, 0]
+    swap7                        // [0,         0, 0, 0, amount, from, amount, from.bal]
+    sub                          // [0,         0, 0, 0, amount, from, from.bal']
+    dup2                         // [0,         0, 0, 0, amount, from, from.bal', from]
+    sstore                       // [0,         0, 0, 0, amount, from]
+    dup2                         // [0,         0, 0, 0, amount, from, amount]
+    _EMIT_WITHDRAWAL(<z0>)       // [0,         0, 0, 0, amount]
+    0x24 calldataload            // [0,         0, 0, 0, amount, to]
+    _SEND_ETH(<z0>)              // [] -- end
+}
+
+#define macro _WITHDRAW_FROM_TO_INF_END(z0) = takes(7) returns(0) {
+    // takes:                      [has_error, 0, 0, 0, amount, from, allowance_slot, allowance]
+    pop pop                     // [has_error, 0, 0, 0, amount, from]
+    _WITHDRAW_FROM_TO_END(<z0>) // [] -- end
+}
+
+#define macro WITHDRAW_FROM_TO(z0, withdrawFromTo_inf_allow_end) = takes(1) returns(0) {
+    // takes:                      [has_error]
+    // -- Initial stack setup.
+    <z0> <z0> <z0>              // [has_error, 0, 0, 0]
+    0x44 calldataload           // [has_error, 0, 0, 0, amount]
+    _LOAD_ADDRESS(0x10)         // [has_error, 0, 0, 0, amount, from]
+    dup1                        // [has_error, 0, 0, 0, amount, from, from]
+    // -- Allowance load & check.
+    _GET_ALLOWANCE(<z0>, <withdrawFromTo_inf_allow_end>)
+    //                             [has_error, 0, 0, 0, amount, from, allowance_slot, allowance]
+    swap7                       // [allowance, 0, 0, 0, amount, from, allowance_slot, has_error]
+    dup8                        // [allowance, 0, 0, 0, amount, from, allowance_slot, has_error, allowance]
+    dup5                        // [allowance, 0, 0, 0, amount, from, allowance_slot, has_error, allowance, amount]
+    gt                          // [allowance, 0, 0, 0, amount, from, allowance_slot, has_error, amount > allowance]
+    or                          // [allowance, 0, 0, 0, amount, from, allowance_slot, has_error']
+    swap7                       // [has_error, 0, 0, 0, amount, from, allowance_slot, allowance]
+    // -- Update allowance.
+    dup4                        // [has_error, 0, 0, 0, amount, from, allowance_slot, allowance, amount]
+    swap1                       // [has_error, 0, 0, 0, amount, from, allowance_slot, amount, allowance]
+    sub                         // [has_error, 0, 0, 0, amount, from, allowance_slot, allowance']
+    swap1                       // [has_error, 0, 0, 0, amount, from, allowance', allowance_slot]
+    sstore                      // [has_error, 0, 0, 0, amount, from]
+    _WITHDRAW_FROM_TO_END(<z0>) // -- end
+}

@@ -46,7 +46,7 @@ def block_offset(index: int) -> int:
 
 def compile_meth(runtime: bool) -> bytes:
     flag = '-r' if runtime else '-b'
-    direct_out = subprocess.getoutput(f'huffc {flag} src/METH_WETH.huff')
+    direct_out = subprocess.getoutput(f'huffy {flag} src/meth-huff/METH.huff')
     out = direct_out.splitlines()[-1]
     return bytes.fromhex(out)
 

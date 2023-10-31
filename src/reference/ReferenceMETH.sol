@@ -103,7 +103,13 @@ contract ReferenceMETH is IMETH {
         }
     }
 
-    function fromOld(address to) external {
+    function reservesOld() external view returns (uint256) {
+        // TODO:
+        assert(false);
+    }
+
+    function depositWithOldTo(address) external {
+        // TODO:
         assert(false);
     }
 

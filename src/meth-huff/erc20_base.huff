@@ -1,0 +1,203 @@
+////////////////////////////////////////////////////////////////
+//                          HELPERS                           //
+////////////////////////////////////////////////////////////////
+
+/**
+ * @dev Determines whether the given `allowance` is "practically infinite".
+ * @param:stack allowance An allowance as a full EVM word.
+ * @param:macro z0 1-byte zero pushing opcode.
+ * @return:stack is_infinite Whether the given `allowance` is practically infinite. 0 if false,
+ * non-zero value in the range [1, 255] if true.
+ */
+#define macro _IS_INF(z0) = takes(1) returns(1) {
+    // takes:      [allowance]
+    <z0>        // [allowance, 0]
+    byte        // [is_infinite]
+    // returns:    [is_infinite]
+}
+
+#define macro _EMIT_TRANSFER(z0, word_size) = takes(3) returns(0) {
+    // takes:                 [to, from, amount]
+    <z0>                   // [to, from, amount, 0]
+    mstore                 // [to, from]
+    __EVENT_HASH(Transfer) // [to, from, Transfer.sig]
+    <word_size>            // [to, from, Transfer.sig, 32]
+    <z0>                   // [to, from, Transfer.sig, 32, 0]
+    log3                   // []
+    // returns:               []
+}
+
+#define macro _TRANSFER(z0, word_size) = takes(6) returns(0) {
+    // takes:             [has_error, from, amount, to, amount, from]
+    // -- Update `from` Balance.
+    sload              // [has_error, from, amount, to, amount, from.bal]
+    dup3               // [has_error, from, amount, to, amount, from.bal, to]
+    swap6              // [to,        from, amount, to, amount, from.bal, has_error]
+    dup2               // [to,        from, amount, to, amount, from.bal, has_error, from.bal]
+    dup4               // [to,        from, amount, to, amount, from.bal, has_error, from.bal, amount]
+    gt                 // [to,        from, amount, to, amount, from.bal, has_error, amount > from.bal]
+    or                 // [to,        from, amount, to, amount, from.bal, has_error']
+    _REQUIRE_NOT()     // [to,        from, amount, to, amount, from.bal]
+    sub                // [to,        from, amount, to, from.bal']
+    dup4               // [to,        from, amount, to, from.bal', from]
+    sstore             // [to,        from, amount, to]
+    // -- Update `to` Balance.
+    sload              // [to,        from, amount, to.bal]
+    dup2               // [to,        from, amount, to.bal, amount]
+    add                // [to,        from, amount, to.bal']
+    dup4               // [to,        from, amount, to.bal', to]
+    sstore             // [to,        from, amount]
+    _EMIT_TRANSFER(<z0>, <word_size>)
+    //                    []
+    // returns:           []
+}
+
+/// @dev Expects msize to be 0-1 words.
+#define macro _APPROVE(z0) = takes(0) returns(0) {
+    0x24 calldataload      // [amount]
+    _LOAD_ADDRESS(0x10)    // [amount, spender]
+
+    // -- Emit Event.
+    dup2                   // [amount, spender, amount]
+    <z0>                   // [amount, spender, amount, 0]
+    mstore                 // [amount, spender]
+    dup1                   // [amount, spender, spender]
+    caller                 // [amount, spender, spender, caller]
+    __EVENT_HASH(Approval) // [amount, spender, spender, caller, Approval.sig]
+    msize                  // [amount, spender, spender, caller, Approval.sig, 32]
+    <z0>                   // [amount, spender, spender, caller, Approval.sig, 32, 0]
+    log3                   // [amount, spender]
+
+    // -- Get Allowance Slot.
+    caller                 // [amount, spender, caller]
+    <z0>                   // [amount, spender, caller, 0]
+    mstore                 // [amount, spender]
+    msize                  // [amount, spender, 32]
+    mstore                 // [amount]
+    msize                  // [amount, 64]
+    <z0>                   // [amount, 64, 0]
+    sha3                   // [amount, allowance_slot]
+    // -- Update Allowance.
+    sstore                 // []
+}
+
+/**
+ * @dev Determines the allowance slot for `(from, caller)` and loads the allowance. Jumps to
+ * `inf_allow_dest` if the allowance is infinite.
+ */
+#define macro _GET_ALLOWANCE(z0, inf_allow_dest) = takes(1) returns(2) {
+    // takes:                 [from]           msize ∈ {0x00, 0x20} (expected)
+
+    // -- Calculate allowance slot.
+    <z0>                   // [from, 0x00]     msize ∈ {0x00, 0x20}
+    mstore                 // []               msize = 0x20
+    caller                 // [caller]         msize = 0x20
+    msize                  // [caller, 0x20]   msize = 0x20
+    mstore                 // []               msize = 0x40
+    msize                  // [0x40]
+    <z0>                   // [0x40, 0x00]
+    sha3                   // [allowance_slot]
+    // -- Load allowance.
+    dup1                   // [allowance_slot, allowance_slot]
+    sload                  // [allowance_slot, allowance]
+    // -- Check infinite.
+    dup1                   // [allowance_slot, allowance, allowance]
+    _IS_INF(<z0>)          // [allowance_slot, allowance, allowance_infinite]
+    <inf_allow_dest> jumpi // [allowance_slot, allowance] -> "returns" to label with
+    // returns:               [allowance_slot, allowance]
+}
+
+////////////////////////////////////////////////////////////////
+//                        VIEW METHODS                        //
+////////////////////////////////////////////////////////////////
+
+#define macro TOTAL_SUPPLY(z0) = takes(0) returns(0) {
+    selfbalance               // [this.balance]
+    _RETURN_WORD(<z0>, msize) // [] -- end
+}
+
+#define macro BALANCE_OF(z0) = takes(0) returns(0) {
+    _LOAD_ADDRESS(0x10)       // [account]
+    sload                     // [account.bal]
+    _RETURN_WORD(<z0>, msize) // [] -- end
+}
+
+#define macro ALLOWANCE(z0) = takes(0) returns(0) {
+    0x34               // [52]
+    // Copying from start of address intead of zero to mitigate risk of dirty address resulting in
+    // valid address.
+    0x10               // [52, 16]
+    0x0c               // [52, 16, 12]
+    calldatacopy       // []
+    msize              // [64]
+    <z0>               // [64, 0]
+    sha3               // [allowance_slot]
+    sload              // [allowance]
+    <z0>               // [allowance, 0]
+    mstore             // []
+    0x20               // [32]
+    <z0>               // [32, 0]
+    return             // [] -- end
+}
+
+////////////////////////////////////////////////////////////////
+//                   STATE-CHANGING METHODS                   //
+////////////////////////////////////////////////////////////////
+
+#define macro TRANSFER(z0) = takes(1) returns(0) {
+    // takes:                 [has_error]
+    caller                 // [has_error, caller]
+    0x24 calldataload      // [has_error, caller, amount]
+    _LOAD_ADDRESS(0x10)    // [has_error, caller, amount, to]
+    dup2                   // [has_error, caller, amount, to, amount]
+    caller                 // [has_error, caller, amount, to, amount, caller]
+    _TRANSFER(<z0>, msize) // []
+    stop                   // [] -- end
+}
+
+#define macro _TRANSFER_FROM_END(z0) = takes(4) returns(0) {
+    // takes:                 [has_error, from, amount, to]
+    dup2                   // [has_error, from, amount, to, amount]
+    dup4                   // [has_error, from, amount, to, amount, from]
+    _TRANSFER(<z0>, 0x20)  // []
+    stop                   // [] -- end
+}
+
+
+/// @dev Macro should not be reachable without directly jumping to `transferFrom_inf_allow`.
+#define macro _TRANSFER_FROM_INF_END(z0) = takes(6) returns(0) {
+    // takes:                   [has_error, from, amount, to, _, _]
+    pop pop                  // [has_error, from, amount, to]
+    _TRANSFER_FROM_END(<z0>) // [] -- end
+}
+
+/// @dev Macro split up so that it doesn't unnecessarily take up one extra block in the dispatcher.
+#define macro TRANSFER_FROM(z0, transferFrom_inf_allow_end) = takes(1) returns(0) {
+    // takes:                   [has_error]
+    _LOAD_ADDRESS(0x10)      // [has_error, from]
+    0x44 calldataload        // [has_error, from, amount]
+    _LOAD_ADDRESS(0x30)      // [has_error, from, amount, to]
+    // -- Get allowance slot & load.
+    dup3                     // [has_error, from, amount, to, from]
+    _GET_ALLOWANCE(<z0>, <transferFrom_inf_allow_end>)
+    //                          [has_error, from, amount, to, allowance_slot, allowance]
+    // -- Check sufficient allowance.
+    swap5                    // [allowance, from, amount, to, allowance_slot, has_error]
+    dup6                     // [allowance, from, amount, to, allowance_slot, has_error, allowance]
+    dup5                     // [allowance, from, amount, to, allowance_slot, has_error, allowance, amount]
+    gt                       // [allowance, from, amount, to, allowance_slot, has_error, amount > allowance]
+    or                       // [allowance, from, amount, to, allowance_slot, has_error']
+    swap5                    // [has_error, from, amount, to, allowance_slot, allowance]
+    // -- Update allowance.
+    dup4                     // [has_error, from, amount, to, allowance_slot, allowance, amount]
+    swap1                    // [has_error, from, amount, to, allowance_slot, amount, allowance]
+    sub                      // [has_error, from, amount, to, allowance_slot, allowance']
+    swap1                    // [has_error, from, amount, to, allowance', allowance_slot]
+    sstore                   // [has_error, from, amount, to]
+    _TRANSFER_FROM_END(<z0>) // [] -- end
+}
+
+#define macro APPROVE(z0) = takes(0) returns(0) {
+    _APPROVE(<z0>)  // []
+    stop            // [] -- end
+}

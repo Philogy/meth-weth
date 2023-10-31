@@ -2,8 +2,7 @@
 pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
-import {METHBaseTest} from "./utils/METHBaseTest.sol";
-import {HuffDeployer} from "smol-huff-deployer/HuffDeployer.sol";
+import {METHBaseTest} from "./base/METHBaseTest.sol";
 import {MIN_INF_ALLOWANCE} from "src/METHConstants.sol";
 import {Reverter} from "./mocks/Reverter.sol";
 import {console2 as console} from "forge-std/console2.sol";
@@ -254,28 +253,30 @@ contract METH_WETHTest is Test, METHBaseTest {
         assertEq(recipient.balance, withdrawAmount);
     }
 
-    function test_failingMintFromOld() public {
-        test_fuzzingMintFromOld(
-            0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 0, 0
+    function test_debug() public {
+        // TODO: Remove
+        test_fuzzingDepositWithOld(
+            0x0000000000000000000000000000000000000000, 0x0000000000000000000000000000000000000000, 1, 0
         );
     }
 
-    function test_fuzzingMintFromOld(address recipient1, address recipient2, uint128 amount1, uint128 amount2) public {
+    function test_fuzzingDepositWithOld(address recipient1, address recipient2, uint128 amount1, uint128 amount2)
+        public
+    {
         amount2 = uint128(bound(amount2, 0, type(uint128).max - amount1));
 
-        vm.deal(address(this), amount1 + amount2);
-
         deal(address(weth), address(meth), amount1);
-        expectMintFromOld(recipient1, amount1);
-        meth.fromOld(recipient1);
+        expectDepositWithOld(recipient1, amount1);
+        meth.depositWithOldTo(recipient1);
         assertEq(meth.balanceOf(recipient1), amount1, "bal 1 wrong");
+        assertEq(meth.reservesOld(), amount1);
 
-        deal(address(weth), address(meth), amount2);
+        deal(address(weth), address(meth), amount1 + amount2);
         uint256 prevBal = meth.balanceOf(recipient2);
-        weth.transfer(address(meth), amount2);
-        expectMintFromOld(recipient2, amount2);
-        meth.fromOld(recipient2);
+        expectDepositWithOld(recipient2, amount2);
+        meth.depositWithOldTo(recipient2);
         assertEq(meth.balanceOf(recipient2), prevBal + amount2, "bal 2 wrong");
+        assertEq(meth.reservesOld(), amount1 + amount2);
     }
 
     function test_fuzzingWithdrawFromFiniteAllowance(
@@ -339,9 +340,9 @@ contract METH_WETHTest is Test, METHBaseTest {
 
     function testUnimplementedReverts() public {
         uint32[] memory exceptionalSelectors = new uint32[](12);
-        exceptionalSelectors[0] = 0x03000000;
-        exceptionalSelectors[1] = 0x04000000;
-        exceptionalSelectors[2] = 0x0a000000;
+        exceptionalSelectors[0] = 0x0a000000;
+        exceptionalSelectors[1] = 0x1d000000;
+        exceptionalSelectors[2] = 0x1e000000;
         exceptionalSelectors[3] = 0x21000000;
         exceptionalSelectors[4] = 0x24000000;
         exceptionalSelectors[5] = 0x29000000;
@@ -484,14 +485,14 @@ contract METH_WETHTest is Test, METHBaseTest {
         }
     }
 
-    function expectMintFromOld(address to, uint256 amount) internal {
+    function expectDepositWithOld(address to, uint256 amount) internal {
         assertLt(amount, 1 << 128);
-        bytes32 mintFromOldEventSig = keccak256("MintFromOld(address,uint256)");
+        bytes32 depositWithOldSig = keccak256("DepositWithOld(address,uint256)");
         vm.expectEmit(true, true, true, true);
         /// @solidity memory-safe-assembly
         assembly {
             mstore(0x00, amount)
-            log2(0x10, 0x10, mintFromOldEventSig, to)
+            log2(0x10, 0x10, depositWithOldSig, to)
         }
     }
 }
