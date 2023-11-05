@@ -1,2 +1,1 @@
 solady/=lib/solady/src/
-smol-huff-deployer/=lib/smol-huff-deployer/src/
