@@ -57,7 +57,12 @@ interface IMETH is IERC20Metadata {
     function sweepLost() external;
 
     function depositWithOldTo(address to) external;
+
+    function withdrawAsOldTo(address to, uint256 amount) external;
+
     function reservesOld() external view returns (uint256);
 
     event DepositWithOld(address indexed to, uint256 amount);
+
+    event WithdrawAsOld(address indexed from);
 }

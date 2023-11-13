@@ -114,7 +114,9 @@ contract ReferenceMETH is IMETH {
         uint256 preReserves = reservesOld;
         unchecked {
             if (amount > preReserves) {
-                // If not enough WETH9 already held as reserves
+                // If not enough WETH9 already held as reserves convert some ETH -> WETH9 backing.
+                // Not checking or using un-deposited WETH for the sake of simplicity and because it
+                // wouldn't really be "withdrawing" then.
                 (bool success,) = address(WETH9).call{value: amount - preReserves}("");
                 require(success);
                 reservesOld = 0;

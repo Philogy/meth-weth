@@ -33,21 +33,21 @@ def test_dispatcher_arrival_block_offset():
         else:
             last_fn_repr = ', start' if last is None else f', last fn: {last.name} @ 0x{last.selector[0]:02x}'
             desc = 'no_match' if val is None else 'function'
-            assert code[offset] == JUMPDEST,\
+            assert code[offset] == JUMPDEST, \
                 f'Missing JUMPDEST at {desc} block 0x{i:02x}; add {find_nearest_jumpdests(code, offset)} padding to 0x{i-1:02x} ({offset}{last_fn_repr})'
             if isinstance(val, Fn):
                 last = val
 
     # Check for the __NO_MATCH() reverting block sequences
-    assert blocks[TOTAL_BLOCKS - 1] is None,\
+    assert blocks[TOTAL_BLOCKS - 1] is None, \
         f'Last block 0x{TOTAL_BLOCKS - 1:02x} expected to be empty no match'
     for i, val in enumerate(blocks[:TOTAL_BLOCKS - 1]):
         offset = block_offset(i)
         if val is None:
-            assert code[offset:offset+BLOCK_SIZE] == NO_MATCH,\
+            assert code[offset:offset+BLOCK_SIZE] == NO_MATCH, \
                 f'Invalid function arrival 0x{i:02x} missing NO_MATCH ({bytes(NO_MATCH[:10]).hex()}...), found {code[offset:offset+len(NO_MATCH)].hex()} instead'
         elif isinstance(val, Fn):
-            assert code[offset:offset+NO_MATCH_CORE_LEN] != NO_MATCH[: NO_MATCH_CORE_LEN],\
+            assert code[offset:offset+NO_MATCH_CORE_LEN] != NO_MATCH[: NO_MATCH_CORE_LEN], \
                 f'Found core of no match sequence while expecting function for [0x{val.num:08x}] {val.sig} @ 0x{i:02x}'
 
 
