@@ -2,22 +2,26 @@
 pragma solidity 0.8.19;
 
 import {IMETH} from "../interfaces/IMETH.sol";
+import {IWETH9} from "../interfaces/IWETH9.sol";
 import {MIN_INF_ALLOWANCE} from "../METHConstants.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
-    struct Value {
-        uint256 value;
-    }
-
     address internal immutable recovery;
+    IWETH9 internal immutable WETH9;
 
     string public constant symbol = "METH";
     string public constant name = "Maximally Efficient Wrapped Ether";
     uint8 public constant decimals = 18;
 
-    constructor(address recovery_) {
+    uint256 public reservesOld;
+    mapping(address => mapping(address => uint256)) public allowance;
+    mapping(address => uint256) public balanceOf;
+
+    constructor(address recovery_, address weth9) {
+        require(recovery_ != address(0) && recovery_ != address(this));
         recovery = recovery_;
+        WETH9 = IWETH9(weth9);
     }
 
     function transfer(address to, uint256 amount) external {
@@ -30,26 +34,19 @@ contract ReferenceMETH is IMETH {
     }
 
     function approve(address spender, uint256 amount) public {
-        _allowance(msg.sender, spender).value = amount;
-        emit Approval(msg.sender, spender, amount);
+        allowance[msg.sender][spender] = amount;
     }
 
     receive() external payable {
-        deposit();
+        balanceOf[msg.sender] += msg.value;
     }
 
     function deposit() public payable {
-        unchecked {
-            _balanceOf(msg.sender).value += msg.value;
-        }
-        emit Deposit(msg.sender, msg.value);
+        balanceOf[msg.sender] += msg.value;
     }
 
     function depositTo(address to) external payable {
-        unchecked {
-            _balanceOf(to).value += msg.value;
-        }
-        emit Deposit(to, msg.value);
+        balanceOf[to] += msg.value;
     }
 
     function depositAndApprove(address spender, uint256 amount) external payable {
@@ -58,13 +55,13 @@ contract ReferenceMETH is IMETH {
     }
 
     function withdrawAll() external {
-        uint256 amount = _balanceOf(msg.sender).value;
+        uint256 amount = balanceOf[msg.sender];
         _withdraw(msg.sender, amount);
         _sendEth(msg.sender, amount);
     }
 
     function withdrawAllTo(address to) external {
-        uint256 amount = _balanceOf(msg.sender).value;
+        uint256 amount = balanceOf[msg.sender];
         _withdraw(msg.sender, amount);
         _sendEth(to, amount);
     }
@@ -92,65 +89,73 @@ contract ReferenceMETH is IMETH {
     }
 
     function sweepLost() external {
-        uint256 zeroBal = _balanceOf(address(0)).value;
-        uint256 thisBal = _balanceOf(address(this)).value;
-        emit Transfer(address(0), recovery, zeroBal);
-        emit Transfer(address(this), recovery, thisBal);
-        _balanceOf(address(0)).value = 0;
-        _balanceOf(address(this)).value = 0;
+        uint256 zeroBal = balanceOf[address(0)];
+        uint256 thisBal = balanceOf[address(this)];
+        balanceOf[address(0)] = 0;
+        balanceOf[address(this)] = 0;
         unchecked {
-            _balanceOf(recovery).value += zeroBal + thisBal;
+            balanceOf[recovery] += zeroBal + thisBal;
         }
     }
 
-    function reservesOld() external view returns (uint256) {
-        // TODO:
-        assert(false);
+    function depositWithOldTo(address to) external {
+        uint256 oldWethBal = WETH9.balanceOf(address(this));
+        uint256 deposited;
+        unchecked {
+            deposited = oldWethBal - reservesOld;
+            balanceOf[to] += deposited;
+        }
+        reservesOld = oldWethBal;
     }
 
-    function depositWithOldTo(address) external {
-        // TODO:
-        assert(false);
+    function withdrawAsOldTo(address to, uint256 amount) external {
+        uint256 preBal = balanceOf[msg.sender];
+        require(preBal >= amount);
+        uint256 preReserves = reservesOld;
+        unchecked {
+            if (amount > preReserves) {
+                // If not enough WETH9 already held as reserves
+                (bool success,) = address(WETH9).call{value: amount - preReserves}("");
+                require(success);
+                reservesOld = 0;
+            } else {
+                reservesOld = preReserves - amount;
+            }
+            balanceOf[msg.sender] = preBal - amount;
+        }
+        WETH9.transfer(to, amount);
     }
 
     function totalSupply() external view returns (uint256) {
-        return address(this).balance;
-    }
-
-    function balanceOf(address acc) external view returns (uint256) {
-        return _balanceOf(acc).value;
-    }
-
-    function allowance(address owner, address spender) external view returns (uint256) {
-        return _allowance(owner, spender).value;
+        unchecked {
+            return address(this).balance + reservesOld;
+        }
     }
 
     function _transfer(address from, address to, uint256 amount) internal {
-        require(_balanceOf(from).value >= amount);
+        uint256 preFromBal = balanceOf[from];
+        require(preFromBal >= amount);
         unchecked {
-            _balanceOf(from).value -= amount;
-            _balanceOf(to).value += amount;
+            balanceOf[from] = preFromBal - amount;
+            balanceOf[to] += amount;
         }
-        emit Transfer(from, to, amount);
     }
 
     function _useAllowance(address owner, uint256 amount) internal {
-        uint256 currentAllowance = _allowance(owner, msg.sender).value;
-        if (currentAllowance < MIN_INF_ALLOWANCE) {
-            require(currentAllowance >= amount);
-            unchecked {
-                _allowance(owner, msg.sender).value = currentAllowance - amount;
-            }
+        uint256 currentAllowance = allowance[owner][msg.sender];
+        if (currentAllowance >= MIN_INF_ALLOWANCE) return;
+        require(currentAllowance >= amount);
+        unchecked {
+            allowance[owner][msg.sender] = currentAllowance - amount;
         }
     }
 
     function _withdraw(address from, uint256 amount) internal {
-        uint256 bal = _balanceOf(from).value;
-        require(bal >= amount);
+        uint256 preBal = balanceOf[from];
+        require(preBal >= amount);
         unchecked {
-            _balanceOf(from).value = bal - amount;
+            balanceOf[from] = preBal - amount;
         }
-        emit Withdrawal(from, amount);
     }
 
     function _sendEth(address to, uint256 amount) internal {
@@ -162,22 +167,6 @@ contract ReferenceMETH is IMETH {
                 returndatacopy(free, 0x00, returndatasize())
                 revert(free, returndatasize())
             }
-        }
-    }
-
-    function _balanceOf(address acc) internal pure returns (Value storage value) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            value.slot := acc
-        }
-    }
-
-    function _allowance(address owner, address spender) internal pure returns (Value storage value) {
-        /// @solidity memory-safe-assembly
-        assembly {
-            mstore(0x00, owner)
-            mstore(0x20, spender)
-            value.slot := keccak256(0x00, 0x40)
         }
     }
 }
