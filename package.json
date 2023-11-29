@@ -1,0 +1,12 @@
+{
+  "name": "meth-weth",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "git@github.com:philogy/meth-weth.git",
+  "author": "Philippe Dumonet <philippe@dumo.net>",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "test-codegen": "pytest --ignore=lib"
+  }
+}
