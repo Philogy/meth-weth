@@ -16,38 +16,25 @@
     // returns:    [is_infinite]
 }
 
-#define macro _EMIT_TRANSFER(z0, word_size) = takes(3) returns(0) {
-    // takes:                 [to, from, amount]
-    <z0>                   // [to, from, amount, 0]
-    mstore                 // [to, from]
-    __EVENT_HASH(Transfer) // [to, from, Transfer.sig]
-    <word_size>            // [to, from, Transfer.sig, 32]
-    <z0>                   // [to, from, Transfer.sig, 32, 0]
-    log3                   // []
-    // returns:               []
-}
-
 #define macro _TRANSFER(z0, word_size) = takes(6) returns(0) {
-    // takes:             [has_error, from, amount, to, amount, from]
+    // takes:             [has_error, amount, to, from, amount, from]
     // -- Update `from` Balance.
-    sload              // [has_error, from, amount, to, amount, from.bal]
-    dup3               // [has_error, from, amount, to, amount, from.bal, to]
-    swap6              // [to,        from, amount, to, amount, from.bal, has_error]
-    dup2               // [to,        from, amount, to, amount, from.bal, has_error, from.bal]
-    dup4               // [to,        from, amount, to, amount, from.bal, has_error, from.bal, amount]
-    gt                 // [to,        from, amount, to, amount, from.bal, has_error, amount > from.bal]
-    or                 // [to,        from, amount, to, amount, from.bal, has_error']
-    _REQUIRE_NOT()     // [to,        from, amount, to, amount, from.bal]
-    sub                // [to,        from, amount, to, from.bal']
-    dup4               // [to,        from, amount, to, from.bal', from]
-    sstore             // [to,        from, amount, to]
+    sload              // [has_error, amount, to, from, amount, start_from_bal]
+    dup4               // [has_error, amount, to, from, amount, start_from_bal, to]
+    swap6              // [to, amount, to, from, amount, start_from_bal, has_error]
+    dup2               // [to, amount, to, from, amount, start_from_bal, has_error, start_from_bal]
+    dup4               // [to, amount, to, from, amount, start_from_bal, has_error, start_from_bal, amount]
+    gt                 // [to, amount, to, from, amount, start_from_bal, has_error_1, amount > start_from_bal]
+    or                 // [to, amount, to, from, amount, start_from_bal, has_error_2]
+    _REQUIRE_NOT()     // [to, amount, to, from, amount, start_from_bal]
+    sub                // [to, amount, to, from, new_from_bal]
+    swap1              // [to, amount, to, new_from_bal, from]
+    sstore             // [to, amount, to]
     // -- Update `to` Balance.
-    sload              // [to,        from, amount, to.bal]
-    dup2               // [to,        from, amount, to.bal, amount]
-    add                // [to,        from, amount, to.bal']
-    dup4               // [to,        from, amount, to.bal', to]
-    sstore             // [to,        from, amount]
-    _EMIT_TRANSFER(<z0>, <word_size>)
+    sload              // [to, amount, start_to_bal]
+    add                // [to, new_to_bal]
+    swap1              // [new_to_bal, to]
+    sstore             // []
     //                    []
     // returns:           []
 }
@@ -56,17 +43,6 @@
 #define macro _APPROVE(z0) = takes(0) returns(0) {
     0x24 calldataload      // [amount]
     _LOAD_ADDRESS(0x10)    // [amount, spender]
-
-    // -- Emit Event.
-    dup2                   // [amount, spender, amount]
-    <z0>                   // [amount, spender, amount, 0]
-    mstore                 // [amount, spender]
-    dup1                   // [amount, spender, spender]
-    caller                 // [amount, spender, spender, caller]
-    __EVENT_HASH(Approval) // [amount, spender, spender, caller, Approval.sig]
-    msize                  // [amount, spender, spender, caller, Approval.sig, 32]
-    <z0>                   // [amount, spender, spender, caller, Approval.sig, 32, 0]
-    log3                   // [amount, spender]
 
     // -- Get Allowance Slot.
     caller                 // [amount, spender, caller]
@@ -146,19 +122,21 @@
 
 #define macro TRANSFER(z0) = takes(1) returns(0) {
     // takes:                 [has_error]
-    caller                 // [has_error, caller]
-    0x24 calldataload      // [has_error, caller, amount]
-    _LOAD_ADDRESS(0x10)    // [has_error, caller, amount, to]
-    dup2                   // [has_error, caller, amount, to, amount]
-    caller                 // [has_error, caller, amount, to, amount, caller]
+    0x24 calldataload      // [has_error, amount]
+    _LOAD_ADDRESS(0x10)    // [has_error, amount, to]
+    caller                 // [has_error, amount, to, caller]
+    dup3                   // [has_error, amount, to, caller, amount]
+    caller                 // [has_error, amount, to, caller, amount, caller]
     _TRANSFER(<z0>, msize) // []
     stop                   // [] -- end
 }
 
 #define macro _TRANSFER_FROM_END(z0) = takes(4) returns(0) {
     // takes:                 [has_error, from, amount, to]
-    dup2                   // [has_error, from, amount, to, amount]
-    dup4                   // [has_error, from, amount, to, amount, from]
+    swap1                  // [has_error, from, to, amount]
+    swap2                  // [has_error, amount, to, from]
+    dup3                   // [has_error, amount, to, from, amount]
+    dup2                   // [has_error, amount, to, from, amount, from]
     _TRANSFER(<z0>, 0x20)  // []
     stop                   // [] -- end
 }

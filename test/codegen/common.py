@@ -76,17 +76,17 @@ def find_nearest_jumpdests(code: bytes, offset: int) -> str:
 
 def _get_func_size(name):
     return {
-        'approve': 2,
-        'withdrawTo': 2,
+        'approve': 1,
+        'depositWithOldTo': 2,
+        'withdrawTo': 1,
         'transferFrom': 2,
-        'depositAndApprove': 2,
-        'withdraw': 2,
+        'depositAndApprove': 1,
+        'withdraw': 1,
         'withdrawFromTo': 2,
-        'withdrawAll': 2,
-        'transfer': 2,
-        'sweepLost': 2,
-        'withdrawAllTo': 2,
-        'depositWithOldTo': 3
+        'withdrawAll': 1,
+        'transfer': 1,
+        'sweepLost': 1,
+        'withdrawAllTo': 1,
     }.get(name, 1)
 
 

@@ -4,19 +4,6 @@
 //               DEPOSIT (AKA WRAPPING) METHODS               //
 ////////////////////////////////////////////////////////////////
 
-
-#define macro _EMIT_DEPOSIT(z0) = takes(1) returns(0) {
-    // takes:                 [to]
-    callvalue              // [to, callvalue]
-    <z0>                   // [to, callvalue, 0]
-    mstore                 // [to]
-    __EVENT_HASH(Deposit)  // [to, Deposit.sig]
-    0x10                   // [to, Deposit.sig, 16]
-    dup1                   // [to, Deposit.sig, 16, 16]
-    log2                   // []
-    // returns:               []
-}
-
 #define macro _DEPOSIT(z0) = takes(0) returns(0) {
     // takes:     []
     caller     // [caller]
@@ -25,9 +12,6 @@
     add        // [caller_bal']
     caller     // [caller_bal', caller]
     sstore     // []
-    caller     // [caller]
-    _EMIT_DEPOSIT(<z0>)
-    //            []
     // returns:   []
 }
 
@@ -40,12 +24,11 @@
     // takes:                     []
     _LOAD_ADDRESS(0x10)        // [to]
     dup1                       // [to, to]
-    sload                      // [to, to.bal]
-    callvalue                  // [to, to.bal, callvalue]
-    add                        // [to, to.bal']
-    dup2                       // [to, to.bal', to]
-    sstore                     // [to]
-    _EMIT_DEPOSIT(<z0>)        // []
+    sload                      // [to, start_to_bal]
+    callvalue                  // [to, start_to_bal, callvalue]
+    add                        // [to, new_to_bal]
+    swap1                      // [new_to_bal, to]
+    sstore                     // []
     stop                       // [] -- end
 }
 

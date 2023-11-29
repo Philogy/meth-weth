@@ -2,7 +2,6 @@ from common import *
 
 
 def test_dispatcher_arrival_block_offset():
-    print(f'FUNCS: {FUNCS}')
     blocks: list[Fn | str | None] = [None] * TOTAL_BLOCKS
 
     # Check that functions don't intersect

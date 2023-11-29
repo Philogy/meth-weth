@@ -19,20 +19,9 @@
     [LOST_N_FOUND]         // [sweep_dest]
     // -- Load lost tokens.
     <z0>                   // [sweep_dest, 0]
-    sload                  // [sweep_dest, 0.bal]
-    address                // [sweep_dest, 0.bal, this]
-    sload                  // [sweep_dest, 0.bal, this.bal]
-    // -- Emit Transfer events.
-    dup3                   // [sweep_dest, 0.bal, this.bal, sweep_dest]
-    <z0>                   // [sweep_dest, 0.bal, this.bal, sweep_dest, 0]
-    __EVENT_HASH(Transfer) // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig]
-    dup5                   // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal]
-    dup4                   // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal, sweep_dest]
-    address                // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal, sweep_dest, this]
-    dup4                   // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal, sweep_dest, this, Transfer.sig]
-    dup8                   // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal, sweep_dest, this, Transfer.sig, this.bal]
-    _SWEEP_LOG3(<z0>)      // [sweep_dest, 0.bal, this.bal, sweep_dest, 0, Transfer.sig, 0.bal]
-    _SWEEP_LOG3(<z0>)      // [sweep_dest, 0.bal, this.bal]
+    sload                  // [sweep_dest, 0_bal]
+    address                // [sweep_dest, 0_bal, this]
+    sload                  // [sweep_dest, 0_bal, this_bal]
     // -- Increase the balance of the sweep address.
     add                    // [sweep_dest, sweep_total
     dup2                   // [sweep_dest, sweep_total, sweep_dest]

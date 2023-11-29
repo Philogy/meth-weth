@@ -4,17 +4,6 @@
 //             WITHDRAW (AKA UNWRAPPING) METHODS              //
 ////////////////////////////////////////////////////////////////
 
-#define macro _EMIT_WITHDRAWAL(z0) = takes(2) returns(0) {
-    // takes:                   [from, amount]
-    <z0>                     // [from, amount, 0]
-    mstore                   // [from]
-    __EVENT_HASH(Withdrawal) // [from, Withdrawal.sig]
-    0x10                     // [from, Withdrawal.sig, 16]
-    dup1                     // [from, Withdrawal.sig, 16, 16]
-    log2                     // []
-    // returns:                 []
-}
-
 #define macro _WITHDRAW_ALL(z0) = takes(0) returns(1) {
     // takes:                 []
     // -- Update balance.
@@ -23,10 +12,6 @@
     <z0>                   // [caller.bal, 0]
     caller                 // [caller.bal, 0, caller]
     sstore                 // [caller.bal]
-    // -- Emit event.
-    caller                 // [caller.bal, caller]
-    dup2                   // [caller.bal, caller, caller.bal]
-    _EMIT_WITHDRAWAL(<z0>) // [caller.bal]
     // returns:               [caller.bal]
 }
 
@@ -45,10 +30,6 @@
     sub                // [0, 0, 0, 0, amount, caller.bal']
     caller             // [0, 0, 0, 0, amount, caller.bal', caller]
     sstore             // [0, 0, 0, 0, amount]
-    caller             // [0, 0, 0, 0, amount, caller]
-    dup2               // [0, 0, 0, 0, amount, caller, amount]
-    _EMIT_WITHDRAWAL(<z0>)
-    //                    [0, 0, 0, 0, amount]
     // returns:           [0, 0, 0, 0, amount]
 }
 
@@ -149,10 +130,8 @@
     <z0>                           // [from_bal, 0, 0, 0, amount, from, amount, 0]
     swap7                          // [0,        0, 0, 0, amount, from, amount, from_bal]
     sub                            // [0,        0, 0, 0, amount, from, new_from_bal]
-    dup2                           // [0,        0, 0, 0, amount, from, new_from_bal, from]
-    sstore                         // [0,        0, 0, 0, amount, from]
-    dup2                           // [0,        0, 0, 0, amount, from, amount]
-    _EMIT_WITHDRAWAL(<z0>)         // [0,        0, 0, 0, amount]
+    swap1                          // [0,        0, 0, 0, amount, new_from_bal, from]
+    sstore                         // [0,        0, 0, 0, amount]
     caller                         // [0,        0, 0, 0, amount, caller]
     _SEND_ETH(<z0>)                // [] -- end
 }
@@ -171,10 +150,8 @@
     <z0>                         // [from.bal,  0, 0, 0, amount, from, amount, 0]
     swap7                        // [0,         0, 0, 0, amount, from, amount, from.bal]
     sub                          // [0,         0, 0, 0, amount, from, from.bal']
-    dup2                         // [0,         0, 0, 0, amount, from, from.bal', from]
+    swap1                        // [0,         0, 0, 0, amount, from.bal', from]
     sstore                       // [0,         0, 0, 0, amount, from]
-    dup2                         // [0,         0, 0, 0, amount, from, amount]
-    _EMIT_WITHDRAWAL(<z0>)       // [0,         0, 0, 0, amount]
     0x24 calldataload            // [0,         0, 0, 0, amount, to]
     _SEND_ETH(<z0>)              // [] -- end
 }

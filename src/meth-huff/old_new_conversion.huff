@@ -23,29 +23,22 @@
     _REQUIRE(<z0>, no_error)     // []
     no_error:
     <z0> mload                   // [bal]
-    // -- Load reserves and calculate amount
+    // -- Load reserves and calculate amount to be deposited.
     [OLD_RESERVES_SLOT]          // [bal, reserve_slot]
     _LOAD_ADDRESS(0x10)          // [bal, reserve_slot, to]
     dup2                         // [bal, reserve_slot, to, reserve_slot]
     sload                        // [bal, reserve_slot, to, reserves]
     dup4                         // [bal, reserve_slot, to, reserves, bal]
     sub                          // [bal, reserve_slot, to, amount]
-    // -- Update to balance
+    // -- Update `to` balance.
     dup2                         // [bal, reserve_slot, to, amount, to]
     sload                        // [bal, reserve_slot, to, amount, to_bal]
-    dup2                         // [bal, reserve_slot, to, amount, to_bal, amount]
-    add                          // [bal, reserve_slot, to, amount, to_bal']
-    dup3                         // [bal, reserve_slot, to, amount, to_bal', to]
-    sstore                       // [bal, reserve_slot, to, amount]
-    // -- Emit `DepositWithOld` event
-    <z0>                         // [bal, reserve_slot, to, amount, 0]
-    mstore                       // [bal, reserve_slot, to]
-    __EVENT_HASH(DepositWithOld) // [bal, reserve_slot, to, MintFromOld_sig]
-    0x10 dup1                    // [bal, reserve_slot, to, MintFromOld_sig, 16, 16]
-    log2                         // [bal, reserve_slot]
+    add                          // [bal, reserve_slot, to, to_bal']
+    dup2                         // [bal, reserve_slot, to, to_bal', to]
+    sstore                       // [bal, reserve_slot, to]
     // -- Save new reserves
-    sstore                 // []
-    stop                   // [] -- end
+    sstore                       // []
+    stop                         // [] -- end
 }
 
 #define macro WITHDRAW_AS_OLD_TO(z0) = takes(1) returns(0) {
