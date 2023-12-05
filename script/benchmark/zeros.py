@@ -1,11 +1,13 @@
-import subprocess
+import argparse
+from py_huff.compile import compile
 
 
 def main():
-    direct_out = subprocess.getoutput('huffc -r src/METH_WETH.huff')
-    out = direct_out.splitlines()[-1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file', help='Path to huff file to be compiled')
+    args = parser.parse_args()
 
-    runtime_bytecode = bytes.fromhex(out)
+    runtime_bytecode = compile(args.file, {}).runtime
 
     zeros = runtime_bytecode.count(0)
 

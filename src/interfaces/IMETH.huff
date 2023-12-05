@@ -24,6 +24,11 @@
 #define function depositWithOldTo(address) nonpayable returns ()
 #define function withdrawAsOldTo(address, uint256) nonpayable returns ()
 #define function reservesOld() view returns (uint256)
+
+#define function nonces(address) view returns (uint256)
+#define function DOMAIN_SEPARATOR() view returns (bytes32)
+#define function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) nonpayable returns ()
+
 // =================== Events ====================
 #define event Transfer(address indexed, address indexed, uint256)
 #define event Deposit(address indexed, uint256)
