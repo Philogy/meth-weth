@@ -2,27 +2,13 @@
 pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
-import {WETH} from "solady/tokens/WETH.sol";
-import {IMETH} from "src/interfaces/IMETH.sol";
 import {MIN_INF_ALLOWANCE} from "src/METHConstants.sol";
 import {Reverter} from "../mocks/Reverter.sol";
 import {console2 as console} from "forge-std/console2.sol";
+import {METHBase} from "./METHBase.sol";
 
 /// @author philogy <https://github.com/philogy>
-abstract contract METHBaseTest is Test {
-    IMETH meth;
-
-    WETH immutable weth = new WETH();
-
-    address immutable recovery = makeAddr("RECOVERY");
-
-    function _setUp(address meth_) internal {
-        meth = IMETH(meth_);
-        vm.label(address(meth), "METH");
-    }
-
-    address internal immutable __methDealer = makeAddr("__methDealer");
-
+abstract contract METHBaseTest is METHBase {
     function testSymbol() public {
         bytes memory symbolCall = abi.encodeCall(meth.symbol, ());
         (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
@@ -84,34 +70,92 @@ abstract contract METHBaseTest is Test {
         assertEq(meth.balanceOf(owner), startBal + depositAmount);
     }
 
-    function test_fuzzingTransfer(address _from, address _to, uint128 _startAmount, uint128 _transferAmount) public {
-        vm.assume(_startAmount >= _transferAmount);
+    function test_transfer() public {
+        address from = makeAddr("from");
+        uint256 fromStartBal = 10.2e18;
+        address to = makeAddr("to");
+        uint256 toStartBal = 0.031e18;
 
-        vm.deal(_from, _startAmount);
-        vm.prank(_from);
-        meth.deposit{value: _startAmount}();
+        dealMeth(from, fromStartBal);
+        dealMeth(to, toStartBal);
 
-        vm.prank(_from);
-        meth.transfer(_to, _transferAmount);
+        uint256 transferAmount = 0.57e18;
+        vm.prank(from);
+        meth.transfer(to, transferAmount);
 
-        if (_from != _to) {
-            assertEq(meth.balanceOf(_from), _startAmount - _transferAmount, "balance from after");
-            assertEq(meth.balanceOf(_to), _transferAmount, "balance to after");
+        assertEq(meth.balanceOf(from), fromStartBal - transferAmount);
+        assertEq(meth.balanceOf(to), toStartBal + transferAmount);
+    }
+
+    function test_fuzzingTransferSame(address from, uint256 startBal, uint256 amount) public {
+        dealMeth(from, startBal);
+
+        if (amount > startBal) {
+            vm.prank(from);
+            vm.expectRevert();
+            meth.transfer(from, amount);
         } else {
-            assertEq(meth.balanceOf(_from), _startAmount);
+            vm.prank(from);
+            meth.transfer(from, amount);
+            assertEq(meth.balanceOf(from), startBal);
         }
     }
 
-    function test_fuzzingApprove(address _owner, address _spender, uint256 _allowance1, uint256 _allowance2) public {
-        assertEq(meth.allowance(_owner, _spender), 0);
+    function test_fuzzingTransferNotSame(
+        address from,
+        address to,
+        // Amounts u128 to emulate practical ETH supply (METH allows overflows)
+        uint128 fromStartAmount,
+        uint128 toStartAmount,
+        uint256 transferAmount
+    ) public {
+        // Same transfer tested above
+        vm.assume(from != to);
 
-        vm.prank(_owner);
-        meth.approve(_spender, _allowance1);
-        assertEq(meth.allowance(_owner, _spender), _allowance1);
+        transferAmount = bound(transferAmount, 0, fromStartAmount);
+        dealMeth(from, fromStartAmount);
+        dealMeth(to, toStartAmount);
 
-        vm.prank(_owner);
-        meth.approve(_spender, _allowance2);
-        assertEq(meth.allowance(_owner, _spender), _allowance2);
+        vm.prank(from);
+        meth.transfer(to, transferAmount);
+
+        assertEq(meth.balanceOf(from), uint256(fromStartAmount) - transferAmount, "balance from after");
+        assertEq(meth.balanceOf(to), uint256(toStartAmount) + transferAmount, "balance to after");
+    }
+
+    function test_fuzzingApprove(address owner, address spender, uint256 allowance1, uint256 allowance2) public {
+        assertEq(meth.allowance(owner, spender), 0);
+
+        vm.prank(owner);
+        meth.approve(spender, allowance1);
+        assertEq(meth.allowance(owner, spender), allowance1);
+
+        vm.prank(owner);
+        meth.approve(spender, allowance2);
+        assertEq(meth.allowance(owner, spender), allowance2);
+    }
+
+    function test_transferFrom() public {
+        address owner = makeAddr("owner");
+        uint256 ownerStartBal = 10.2e18;
+        address spender = makeAddr("spender");
+        uint256 spenderStartAllowance = 3.7e18;
+        address to = makeAddr("to");
+        uint256 toStartBal = 0.031e18;
+        uint256 transferAmount = 1.6819e18;
+
+        dealMeth(owner, ownerStartBal);
+        dealMeth(to, toStartBal);
+
+        vm.prank(owner);
+        meth.approve(spender, spenderStartAllowance);
+
+        vm.prank(spender);
+        meth.transferFrom(owner, to, transferAmount);
+
+        assertEq(meth.balanceOf(owner), ownerStartBal - transferAmount);
+        assertEq(meth.balanceOf(to), toStartBal + transferAmount);
+        assertEq(meth.allowance(owner, spender), spenderStartAllowance - transferAmount);
     }
 
     function test_fuzzingTransferFromInfinite(
@@ -148,34 +192,34 @@ abstract contract METHBaseTest is Test {
     }
 
     function test_fuzzingTransferFrom(
-        address _operator,
-        address _from,
-        address _to,
-        uint256 _allowance,
-        uint128 _startAmount,
-        uint128 _transferAmount
+        address operator,
+        address from,
+        address to,
+        uint256 allowance,
+        uint128 startAmount,
+        uint128 transferAmount
     ) public {
-        _allowance = bound(_allowance, _startAmount, MIN_INF_ALLOWANCE - 1);
-        vm.assume(_allowance >= _startAmount);
-        vm.assume(_startAmount >= _transferAmount);
+        allowance = bound(allowance, startAmount, MIN_INF_ALLOWANCE - 1);
+        vm.assume(allowance >= startAmount);
+        vm.assume(startAmount >= transferAmount);
 
         // Setup.
-        vm.deal(_from, _startAmount);
-        vm.prank(_from);
-        meth.deposit{value: _startAmount}();
-        vm.prank(_from);
-        meth.approve(_operator, _allowance);
+        vm.deal(from, startAmount);
+        vm.prank(from);
+        meth.deposit{value: startAmount}();
+        vm.prank(from);
+        meth.approve(operator, allowance);
 
         // Actual test.
-        vm.prank(_operator);
-        meth.transferFrom(_from, _to, _transferAmount);
+        vm.prank(operator);
+        meth.transferFrom(from, to, transferAmount);
 
-        assertEq(meth.allowance(_from, _operator), _allowance - _transferAmount);
-        if (_from != _to) {
-            assertEq(meth.balanceOf(_from), _startAmount - _transferAmount);
-            assertEq(meth.balanceOf(_to), _transferAmount);
+        assertEq(meth.allowance(from, operator), allowance - transferAmount);
+        if (from != to) {
+            assertEq(meth.balanceOf(from), startAmount - transferAmount);
+            assertEq(meth.balanceOf(to), transferAmount);
         } else {
-            assertEq(meth.balanceOf(_from), _startAmount);
+            assertEq(meth.balanceOf(from), startAmount);
         }
     }
 
@@ -307,50 +351,11 @@ abstract contract METHBaseTest is Test {
         assertEq(meth.balanceOf(recovery), 2.8 ether);
     }
 
-    function testNonPayableRevertsOnValue() public {
-        // View methods
-        _testNonPayable(meth.symbol.selector, "");
-        _testNonPayable(meth.name.selector, "");
-        _testNonPayable(meth.decimals.selector, "");
-        _testNonPayable(meth.totalSupply.selector, "");
-        _testNonPayable(meth.balanceOf.selector, abi.encode(vm.addr(1)));
-        _testNonPayable(meth.allowance.selector, abi.encode(vm.addr(1), vm.addr(2)));
-
-        // Non-view methods
-        _testNonPayable(meth.withdraw.selector, abi.encode(uint256(0)));
-        _testNonPayable(meth.withdrawTo.selector, abi.encode(vm.addr(3), uint256(0)));
-        _testNonPayable(meth.withdrawAll.selector, "");
-        _testNonPayable(meth.withdrawAllTo.selector, abi.encode(vm.addr(1)));
-        _testNonPayable(meth.transfer.selector, abi.encode(vm.addr(1), uint256(0)));
-    }
-
-    function _testNonPayable(bytes4 _selector, bytes memory _addedData) internal {
-        bytes memory dataForCall = abi.encodePacked(_selector, _addedData);
-        (bool success, bytes memory revertData) = address(meth).call{value: 1 wei}(dataForCall);
-        assertFalse(success, "Non-payable function accepted value");
-        assertEq(revertData, "", "msg.value revert should be empty");
-    }
-
     function test_fuzzingDefaultBalance(address account) public {
         assertEq(meth.balanceOf(account), 0);
     }
 
     function test_fuzzingDefaultAllowance(address owner, address spender) public {
         assertEq(meth.allowance(owner, spender), 0);
-    }
-
-    function dealMeth(address to, uint256 amount) internal {
-        uint256 balBefore = __methDealer.balance;
-        hoax(__methDealer, amount);
-        meth.depositTo{value: amount}(to);
-        vm.deal(__methDealer, balBefore);
-    }
-
-    function min(uint256 x, uint256 y) internal pure returns (uint256) {
-        return x < y ? x : y;
-    }
-
-    function max(uint256 x, uint256 y) internal pure returns (uint256) {
-        return x > y ? x : y;
     }
 }

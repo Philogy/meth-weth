@@ -1,19 +1,32 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import {METHInjected} from "./base/METHInjected.sol";
 import {METHBaseTest} from "./base/METHBaseTest.sol";
-import {HuffDeployer} from "./utils/HuffDeployer.sol";
-import {LibString} from "solady/utils/LibString.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract METHTest is METHBaseTest {
-    using LibString for address;
+contract METHTest is METHInjected, METHBaseTest {
+    function testNonPayableRevertsOnValue() public {
+        // View methods
+        _testNonPayable(meth.symbol.selector, "");
+        _testNonPayable(meth.name.selector, "");
+        _testNonPayable(meth.decimals.selector, "");
+        _testNonPayable(meth.totalSupply.selector, "");
+        _testNonPayable(meth.balanceOf.selector, abi.encode(vm.addr(1)));
+        _testNonPayable(meth.allowance.selector, abi.encode(vm.addr(1), vm.addr(2)));
 
-    function setUp() public {
-        string[] memory args = new string[](2);
-        args[0] = string(abi.encodePacked("LOST_N_FOUND=", recovery.toHexString()));
-        args[1] = string(abi.encodePacked("OLD_WETH=", address(weth).toHexString()));
-        address meth_ = HuffDeployer.deploy("src/meth-huff/METH.huff", args, 0);
-        _setUp(meth_);
+        // Non-view methods
+        _testNonPayable(meth.withdraw.selector, abi.encode(uint256(0)));
+        _testNonPayable(meth.withdrawTo.selector, abi.encode(vm.addr(3), uint256(0)));
+        _testNonPayable(meth.withdrawAll.selector, "");
+        _testNonPayable(meth.withdrawAllTo.selector, abi.encode(vm.addr(1)));
+        _testNonPayable(meth.transfer.selector, abi.encode(vm.addr(1), uint256(0)));
+    }
+
+    function _testNonPayable(bytes4 _selector, bytes memory _addedData) internal {
+        bytes memory dataForCall = abi.encodePacked(_selector, _addedData);
+        (bool success, bytes memory revertData) = address(meth).call{value: 1 wei}(dataForCall);
+        assertFalse(success, "Non-payable function accepted value");
+        assertEq(revertData, "", "msg.value revert should be empty");
     }
 }
