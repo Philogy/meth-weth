@@ -497,8 +497,8 @@
         INVALID_NON_PAYABLE()
         PERMIT(callvalue)
         /// @dev Selectors 0xd6000000 - 0xd7ffffff will exceptionally revert.
-        /* padding (12) */ stop stop stop stop stop    stop stop stop stop stop
-                           stop stop
+        /* padding (13) */ stop stop stop stop stop    stop stop stop stop stop
+                           stop stop stop
     dest_0xd8: __NO_MATCH()
     dest_0xd9: __NO_MATCH()
     dest_0xda: __NO_MATCH()

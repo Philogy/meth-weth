@@ -6,11 +6,6 @@
 
 #define constant EC_RECOVER_ADDR = 0x1
 
-#define macro _DOMAIN_SEPARATOR() = takes(0) returns(1) {
-    // TODO: Check for fork via chain ID / address change
-    [CACHED_DOMAIN_SEP]
-}
-
 #define macro PERMIT(z0) = takes(1) returns(0) {
     /**
      * takes:                     [has_error]
@@ -84,8 +79,7 @@
     0x1901 0x21                  // [has_error, past_deadline, owner, 0x1901, 0x21]
     // MSTORE 1-byte off word alignment to ensure word 0x20 is cleared for ecrecover calldata later.
     mstore                       // [has_error]
-    // TODO: Check for fork via chain ID.
-    _DOMAIN_SEPARATOR()          // [has_error, past_deadline, owner, domain_separator]
+    [CACHED_DOMAIN_SEP]          // [has_error, past_deadline, owner, domain_separator]
     0x41                         // [has_error, past_deadline, owner, domain_separator, 0x41]
     mstore                       // [has_error, past_deadline, owner]
     0x42 0x3f                    // [has_error, past_deadline, owner, 0x42, 0x3f]
@@ -105,10 +99,9 @@
      0x41 0xa3 0x3f              // [has_error, past_deadline, owner, 0x41, 0xa3, 0x3f]
      calldatacopy                // [has_error, past_deadline, owner]
 
-     0x20 dup1 dup1 0x80 <z0>    // [has_error, past_deadline, owner, 0x20, 0x20, 0x20, 0x80, 0x00]
-     [EC_RECOVER_ADDR]           // [has_error, past_deadline, owner, 0x20, 0x20, 0x1f, 0x80, 0x00, ecrecover_addr]
-     gas staticcall              // [has_error, past_deadline, owner, 0x20, suc]
-     pop                         // [has_error, past_deadline, owner, 0x20]
+     0x20 0x1 0x80 <z0>          // [has_error, past_deadline, owner, 0x20, 0x01, 0x80, 0x00]
+     [EC_RECOVER_ADDR]           // [has_error, past_deadline, owner, 0x20, 0x01, 0x80, 0x00, ecrecover_addr]
+     gas staticcall              // [has_error, past_deadline, owner, suc]
      mload                       // [has_error, past_deadline, owner, signer]
      sub                         // [has_error, past_deadline, signer_invalid]
      or                          // [has_error, past_deadline || signer_invalid]
@@ -125,6 +118,6 @@
 }
 
 #define macro GET_DOMAIN_SEPARATOR(z0) = takes(0) returns(0) {
-    _DOMAIN_SEPARATOR()          // [domain_separator]
+    [CACHED_DOMAIN_SEP]          // [domain_separator]
     _RETURN_WORD(<z0>, msize)    // [] -- end
 }
