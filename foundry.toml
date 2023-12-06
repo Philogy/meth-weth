@@ -4,7 +4,6 @@ out = 'out'
 libs = ['lib']
 evm_version = "paris"
 
-gas_reports = ["METH", "METHDeployer"]
 
 [fuzz]
 runs = 256
