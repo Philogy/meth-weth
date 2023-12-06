@@ -1,7 +1,6 @@
 import subprocess
 from Crypto.Hash import keccak
 from typing import NamedTuple
-import os
 
 Fn = NamedTuple(
     'Fn',
@@ -23,10 +22,26 @@ NO_MATCH = bytes([JUMPDEST, RETURNDATASIZE, RETURNDATASIZE, REVERT] + [0] * 60)
 
 
 def _get_sigs() -> list[str]:
+    def clean_type(t: str) -> str:
+        if t == 'int':
+            return 'int256'
+        if t == 'uint':
+            return 'uint256'
+        return t
+
     def sig_from_func(s: str) -> str:
+        # Skip '#define function'
         r = s.split(' ', 2)[-1]
         assert r.count(')') == 2
-        return r[:r.index(')') + 1].replace(' ', '')
+        core_sig = r[:r.index(')') + 1]
+        name = core_sig[:r.index('(')]  # )
+        params = core_sig[r.index('(') + 1:r.index(')')]
+        unnamed_types = [
+            clean_type(p.strip().split(' ')[0])
+            for p in params.split(',')
+        ]
+        return f'{name}({",".join(unnamed_types)})'
+
     with open('src/interfaces/IMETH.huff', 'r') as f:
         funcs = [
             line
