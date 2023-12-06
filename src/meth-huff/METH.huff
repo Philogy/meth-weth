@@ -171,11 +171,9 @@
         __FUNC_SIG(totalSupply)
         __NON_PAYABLE_SELECTOR_CHECK()
         TOTAL_SUPPLY(callvalue)
-        /* padding (46) */ stop stop stop stop stop    stop stop stop stop stop
+        /* padding (22) */ stop stop stop stop stop    stop stop stop stop stop
                            stop stop stop stop stop    stop stop stop stop stop
-                           stop stop stop stop stop    stop stop stop stop stop
-                           stop stop stop stop stop    stop stop stop stop stop
-                           stop stop stop stop stop    stop
+                           stop stop
     dest_0x19: __NO_MATCH()
     dest_0x1a: __NO_MATCH()
     dest_0x1b: __NO_MATCH()
