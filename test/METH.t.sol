@@ -2,6 +2,8 @@
 pragma solidity 0.8.19;
 
 import {METHInjected} from "./base/METHInjected.sol";
+import {HuffDeployer, CodeType} from "./utils/HuffDeployer.sol";
+import {METH_RUNTIME} from "../src/METHConstants.sol";
 import {METHBaseTest} from "./base/METHBaseTest.sol";
 
 /// @author philogy <https://github.com/philogy>
@@ -21,6 +23,12 @@ contract METHTest is METHInjected, METHBaseTest {
         _testNonPayable(meth.withdrawAll.selector, "");
         _testNonPayable(meth.withdrawAllTo.selector, abi.encode(vm.addr(1)));
         _testNonPayable(meth.transfer.selector, abi.encode(vm.addr(1), uint256(0)));
+    }
+
+    function testRuntimeCodeConstant() public {
+        bytes memory methCode = HuffDeployer.getBytecode(CodeType.Runtime, "src/meth-huff/METH.huff", new string[](0));
+
+        assertEq(METH_RUNTIME, methCode);
     }
 
     function _testNonPayable(bytes4 _selector, bytes memory _addedData) internal {

@@ -7,6 +7,7 @@
   "license": "MIT",
   "private": true,
   "scripts": {
+    "build": "forge build && python3 script/build-helpers/constant-inserter.py",
     "test-codegen": "pytest --ignore=lib",
     "test-functionality": "forge test --nmp test/gas/METHGas.t.sol --ffi -vvv --summary",
     "gas-report": "forge test --mp test/gas/METHGas.t.sol --ffi --gas-report",
