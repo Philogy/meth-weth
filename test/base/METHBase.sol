@@ -3,14 +3,14 @@ pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
 import {WETH} from "solady/tokens/WETH.sol";
-import {METH} from "../mocks/MockMETH.sol";
+import {MockMETH} from "../mocks/MockMETH.sol";
 
 /// @author philogy <https://github.com/philogy>
 contract METHBase is Test {
     WETH immutable weth = new WETH();
     address immutable recovery = makeAddr("RECOVERY");
     address internal immutable __methDealer = makeAddr("__methDealer");
-    METH immutable meth = new METH();
+    MockMETH immutable meth = new MockMETH();
 
     constructor() {
         vm.label(address(meth), "METH");

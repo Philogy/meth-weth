@@ -2,13 +2,12 @@
 pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
-import {IMETH} from "src/interfaces/IMETH.sol";
-import {METHCode} from "./METHCode.sol";
+import {METH} from "src/METH.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract METHSymbolicTest is Test, METHCode {
+contract METHSymbolicTest is Test {
     function proveTransfer(address from, address to, address other, uint256 amount) public {
-        IMETH meth = _deployMETH();
+        METH meth = new METH();
 
         uint256 fromBalBefore = meth.balanceOf(from);
         uint256 toBalBefore = meth.balanceOf(to);

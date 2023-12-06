@@ -4,7 +4,7 @@ pragma solidity 0.8.19;
 import {IMETH} from "src/interfaces/IMETH.sol";
 
 /// @author philogy <https://github.com/philogy>
-contract METH is IMETH {
+contract MockMETH is IMETH {
     ////////////////////////////////////////////////////////////////
     //                         INTERFACE                          //
     ////////////////////////////////////////////////////////////////
@@ -24,6 +24,9 @@ contract METH is IMETH {
     function transfer          (address, uint256)          external                              { assert(_state = false);    }
     function transferFrom      (address, address, uint256) external                              { assert(_state = false);    }
     function approve           (address, uint256)          external                              { assert(_state = false);    }
+    function nonces            (address)                   external view returns (uint256)       { assert(_state); return 0 ; }
+    // TODO: function DOMAIN_SEPARATOR() view returns (bytes32)
+    function permit            (address, address, uint, uint, uint8, bytes32, bytes32) external  { assert(_state = false);    }
     function deposit           ()                          external payable                      { assert(_state = false);    }
     function depositTo         (address)                   external payable                      { assert(_state = false);    }
     function depositAndApprove (address, uint256)          external payable                      { assert(_state = false);    }
