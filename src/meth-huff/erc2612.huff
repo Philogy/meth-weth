@@ -1,0 +1,130 @@
+/// @dev Identifying placeholder (keccak256("meth.immutable.cached-domain-separator")).
+#define constant CACHED_DOMAIN_SEP = 0x10f8af3f74809826d7cd77ddd96d92e988136f05ce853da5f332ad1120555de5
+
+/// @dev `keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)")`.
+#define constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9
+
+#define constant EC_RECOVER_ADDR = 0x1
+
+#define macro _DOMAIN_SEPARATOR() = takes(0) returns(1) {
+    // TODO: Check for fork via chain ID / address change
+    [CACHED_DOMAIN_SEP]
+}
+
+#define macro PERMIT(z0) = takes(1) returns(0) {
+    /**
+     * takes:                     [has_error]
+     *     calldata   val_start
+     *     0x04:0x24 - <0x10> address owner
+     *     0x24:0x44 - <0x30> address spender
+     *     0x44:0x64 - uint256 amount
+     *     0x64:0x84 - uint256 deadline
+     *     0x84:0xa4 - uint8   v
+     *     0xa4:0xc4 - bytes32 r
+     *     0xc4:0xe4 - bytes32 s
+     *
+     * initial Permit struct memory layout:
+     *     0x00:0x20 - Permit Typehash
+     *     0x20:0x40 - owner   \
+     *     0x40:0x60 - spender /===> allowance slot pre-image
+     *     0x60:0x80 - amount
+     *     0x80:0xa0 - nonce
+     *     0xa0:0xc0 - deadline
+     */
+
+    // -- Load and lay out first `Permit` fields.
+    [PERMIT_TYPEHASH]            // [has_error, permit_typehash]
+    msize                        // [has_error, permit_typehash, 0x00]
+    mstore                       // [has_error]
+    _LOAD_ADDRESS(0x10) dup1     // [has_error, owner, owner]
+    msize                        // [has_error, owner, owner, 0x20]
+    mstore                       // [has_error, owner]
+    0x44 calldataload dup1       // [has_error, owner, amount, amount]
+    msize                        // [has_error, owner, amount, amount, 0x40]
+    _LOAD_ADDRESS(0x30)          // [has_error, owner, amount, amount, 0x40, spender]
+    msize                        // [has_error, owner, amount, amount, 0x40, spender, 0x40]
+    mstore                       // [has_error, owner, amount, amount, 0x40]
+    // -- Lay out amount and update allowance.
+    0x20                         // [has_error, owner, amount, amount, 0x40, 0x20]
+    sha3                         // [has_error, owner, amount, amount, allowance_slot]
+    sstore                       // [has_error, owner, amount]
+    msize                        // [has_error, owner, amount, 0x60]
+    mstore                       // [has_error, owner]
+    // -- Load, lay out and update nonce.
+    dup1                         // [has_error, owner, owner]
+    _NONCE_SLOT() dup1           // [has_error, owner, nonce_slot, nonce_slot]
+    sload dup1                   // [has_error, owner, nonce_slot, nonce, nonce]
+    msize                        // [has_error, owner, nonce_slot, nonce, nonce, 0x80]
+    mstore                       // [has_error, owner, nonce_slot, nonce]
+    0x1                          // [has_error, owner, nonce_slot, nonce, 1]
+    add                          // [has_error, owner, nonce_slot, nonce + 1]
+    swap1                        // [has_error, owner, nonce + 1, nonce_slot]
+    sstore                       // [has_error, owner]
+    // -- Lay out and check deadline.
+    0x64 calldataload            // [has_error, owner, deadline]
+    dup1                         // [has_error, owner, deadline, deadline]
+    msize                        // [has_error, owner, deadline, deadline, 0xa0]
+    mstore                       // [has_error, owner, deadline]
+    timestamp                    // [has_error, owner, deadline, now]
+    gt                           // [has_error, owner, now > deadline]
+    swap1                        // [has_error, past_deadline, owner]
+    // -- Compute Permit struct hash.
+    msize                        // [has_error, past_deadline, owner, 0xc0]
+    <z0>                         // [has_error, past_deadline, owner, 0xc0, 0x00]
+    sha3                         // [has_error, past_deadline, owner, permit_struct_hash]
+    // -- Compute EIP712 message hash.
+    /**
+     * memory layout:
+     *     0x3f:0x41 - EIP712 Message header bytes (0x1901)
+     *     0x41:0x61 - Domain separator
+     *     0x61:0x81 - Permit struct hash
+     */
+    0x61                         // [has_error, past_deadline, owner, permit_struct_hash, 0x61]
+    mstore                       // [has_error, past_deadline, owner]
+    0x1901 0x21                  // [has_error, past_deadline, owner, 0x1901, 0x21]
+    // MSTORE 1-byte off word alignment to ensure word 0x20 is cleared for ecrecover calldata later.
+    mstore                       // [has_error]
+    // TODO: Check for fork via chain ID.
+    _DOMAIN_SEPARATOR()          // [has_error, past_deadline, owner, domain_separator]
+    0x41                         // [has_error, past_deadline, owner, domain_separator, 0x41]
+    mstore                       // [has_error, past_deadline, owner]
+    0x42 0x3f                    // [has_error, past_deadline, owner, 0x42, 0x3f]
+    sha3                         // [has_error, past_deadline, owner, permit_message_hash]
+    // -- Call ecrecover to verify signer.
+    /**
+     * memory layout:
+     *     0x00:0x20 - Message hash.
+     *     0x20:0x40 - v
+     *     0x40:0x60 - r
+     *     0x60:0x80 - s
+     */
+     <z0>                        // [has_error, past_deadline, owner, permit_message_hash, 0x00]
+     mstore                      // [has_error, past_deadline, owner]
+     // Copy v, r, s at once. Dirty bits in v ignored, word in memory for v should otherwise be
+     // clean because of previous MSTOREs.
+     0x41 0xa3 0x3f              // [has_error, past_deadline, owner, 0x41, 0xa3, 0x3f]
+     calldatacopy                // [has_error, past_deadline, owner]
+
+     0x20 dup1 dup1 0x80 <z0>    // [has_error, past_deadline, owner, 0x20, 0x20, 0x20, 0x80, 0x00]
+     [EC_RECOVER_ADDR]           // [has_error, past_deadline, owner, 0x20, 0x20, 0x1f, 0x80, 0x00, ecrecover_addr]
+     gas staticcall              // [has_error, past_deadline, owner, 0x20, suc]
+     pop                         // [has_error, past_deadline, owner, 0x20]
+     mload                       // [has_error, past_deadline, owner, signer]
+     sub                         // [has_error, past_deadline, signer_invalid]
+     or                          // [has_error, past_deadline || signer_invalid]
+     or                          // [updated_error]
+     _REQUIRE_NOT()              // []
+    stop                         // [] -- done
+}
+
+#define macro NONCES(z0) = takes(0) returns(0) {
+    _LOAD_ADDRESS(0x10)          // [owner]
+    _NONCE_SLOT()                // [nonces_slot]
+    sload                        // [nonce]
+    _RETURN_WORD(<z0>, msize)    // [] -- end
+}
+
+#define macro GET_DOMAIN_SEPARATOR(z0) = takes(0) returns(0) {
+    _DOMAIN_SEPARATOR()          // [domain_separator]
+    _RETURN_WORD(<z0>, msize)    // [] -- end
+}

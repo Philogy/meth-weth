@@ -248,6 +248,43 @@ abstract contract METHBaseTest is METHBase {
         vm.stopPrank();
     }
 
+    function test_fuzzingNoncesStartAtZero(address owner) public {
+        assertEq(meth.nonces(owner), 0);
+    }
+
+    function test_fuzzingPermit(
+        address submitter,
+        uint256 startAllowance,
+        uint256 newAllowance,
+        uint256 nonce,
+        uint256 currentTime,
+        uint256 deadline
+    ) public {
+        vm.warp(bound(currentTime, 0, deadline));
+
+        Account memory owner = makeAccount("owner");
+        nonce = bound(nonce, 0, type(uint256).max - 1);
+        _setNonce(owner.addr, nonce);
+        assertEq(meth.nonces(owner.addr), nonce);
+
+        address spender = makeAddr("spender");
+
+        vm.prank(owner.addr);
+        meth.approve(spender, startAllowance);
+        assertEq(meth.allowance(owner.addr, spender), startAllowance);
+
+        (uint8 v, bytes32 r, bytes32 s) = _signPermit(owner, spender, newAllowance, nonce, deadline);
+
+        vm.prank(submitter);
+        meth.permit(owner.addr, spender, newAllowance, deadline, v, r, s);
+        assertEq(meth.allowance(owner.addr, spender), newAllowance);
+        assertEq(meth.nonces(owner.addr), nonce + 1);
+    }
+
+    function test_debug() public {
+        meth.DOMAIN_SEPARATOR();
+    }
+
     function testWithdrawTo() public {
         address owner = makeAddr("owner");
         address recipient = makeAddr("recipient");

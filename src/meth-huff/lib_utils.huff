@@ -70,13 +70,21 @@
     // returns:        // [addr]
 }
 
+
+/**
+ * @dev Pushes a sanitized address from calldata to the stack.
+ * @param:stack value The word to be returned.
+ * @param:macro z0 A literal or opcode that will result in 0 being pushed to the stack.
+ * @param:macro word_size A literal or opcode that will result in 0x20 (32) being pushed after
+ * 1 MSTORE at 0x00.
+ */
 #define macro _RETURN_WORD(z0, word_size) = takes(1) returns(0) {
     // takes:      [x]
-    <z0>        // [x, 0] 
+    <z0>        // [x, 0]
     mstore      // []
-    <word_size> // [32]
-    <z0>        // [32, 0]
-    return      // []
+    <word_size> // [0x20]
+    <z0>        // [0x20, 0]
+    return      // [] -- end
 }
 
 #define macro _SEND_ETH(z0) = takes(6) returns(0) {

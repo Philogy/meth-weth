@@ -2,7 +2,6 @@ from common import *
 
 
 def test_dispatcher_arrival_block_offset():
-    print(f'FUNCS: {FUNCS}')
     blocks: list[Fn | str | None] = [None] * TOTAL_BLOCKS
 
     # Check that functions don't intersect
@@ -23,7 +22,7 @@ def test_dispatcher_arrival_block_offset():
                 assert 0, f'Continuation of {f.sig} intersects with continuation of "{existing_val}" at block {i:02x}'
             blocks[b + d] = f.name
 
-    code = compile_meth(True)
+    code = compile_meth(runtime=True)
 
     last: None | Fn = None
     for i, val in enumerate(blocks):

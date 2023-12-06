@@ -2,3 +2,16 @@
 
 /// @dev Slot for reserves of "old" WETH e.g. WETH9
 #define constant OLD_RESERVES_SLOT = 0x10000000000000000000000000000000000000000
+
+#define macro NONCE_SLOT_MASK() = takes(0) returns(1) {
+    0x2                   // [2]
+    0xa0                  // [2, 160]
+    shl                   // [2 << 160]
+}
+
+#define macro _NONCE_SLOT() = takes(1) returns(1) {
+    // takes:                      [clean_addr]
+    NONCE_SLOT_MASK()           // [clean_addr, none_slot_mask]
+    or                          // [nonce_slot]
+    // returns:                    [nonce_slot]
+}

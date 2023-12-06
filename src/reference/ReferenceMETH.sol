@@ -14,14 +14,26 @@ contract ReferenceMETH is IMETH {
     string public constant name = "Maximally Efficient Wrapped Ether";
     uint8 public constant decimals = 18;
 
+    bytes32 internal immutable CACHED_DOMAIN_SEPARATOR;
+
     uint256 public reservesOld;
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => uint256) public balanceOf;
+    mapping(address => uint256) public nonces;
 
     constructor(address recovery_, address weth9) {
         require(recovery_ != address(0) && recovery_ != address(this));
         recovery = recovery_;
         WETH9 = IWETH9(weth9);
+        CACHED_DOMAIN_SEPARATOR = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes("1")),
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
     function transfer(address to, uint256 amount) external {
@@ -128,10 +140,38 @@ contract ReferenceMETH is IMETH {
         WETH9.transfer(to, amount);
     }
 
+    function permit(address owner, address spender, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        external
+    {
+        bytes32 permitMessageHash = keccak256(
+            abi.encodePacked(
+                bytes2(hex"1901"),
+                DOMAIN_SEPARATOR(),
+                keccak256(
+                    abi.encode(
+                        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
+                        owner,
+                        spender,
+                        amount,
+                        nonces[owner]++,
+                        deadline
+                    )
+                )
+            )
+        );
+        address signer = ecrecover(permitMessageHash, v, r, s);
+        require(signer != address(0) && signer == address(owner) && deadline >= block.timestamp);
+        allowance[owner][spender] = amount;
+    }
+
     function totalSupply() external view returns (uint256) {
         unchecked {
             return address(this).balance + reservesOld;
         }
+    }
+
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return CACHED_DOMAIN_SEPARATOR;
     }
 
     function _transfer(address from, address to, uint256 amount) internal {

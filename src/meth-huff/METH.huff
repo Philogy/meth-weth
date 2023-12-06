@@ -3,6 +3,7 @@
 #include "./lib_meth_layout.huff"
 #include "./erc20_base.huff"
 #include "./erc20_metadata.huff"
+#include "./erc2612.huff"
 #include "./weth_deposit.huff"
 #include "./weth_withdraw.huff"
 #include "./old_new_conversion.huff"
@@ -250,7 +251,13 @@
     dest_0x33: __NO_MATCH()
     dest_0x34: __NO_MATCH()
     dest_0x35: __NO_MATCH()
-    dest_0x36: __NO_MATCH()
+    dest_0x36:
+        // 0x3644e515
+        __FUNC_SIG(DOMAIN_SEPARATOR)
+        __NON_PAYABLE_SELECTOR_CHECK()
+        GET_DOMAIN_SEPARATOR(callvalue)
+        /* padding (14) */ stop stop stop stop stop    stop stop stop stop stop
+                           stop stop stop stop
     dest_0x37: __NO_MATCH()
     dest_0x38: __NO_MATCH()
     dest_0x39: __NO_MATCH()
@@ -335,7 +342,15 @@
     dest_0x7b: __NO_MATCH()
     dest_0x7c: __NO_MATCH()
     dest_0x7d: __NO_MATCH()
-    dest_0x7e: __NO_MATCH()
+    dest_0x7e:
+        // 0x7ecebe00
+        __FUNC_SIG(nonces)
+        __NON_PAYABLE_SELECTOR_CHECK()
+        NONCES(callvalue)
+        /* padding (34) */ stop stop stop stop stop    stop stop stop stop stop
+                           stop stop stop stop stop    stop stop stop stop stop
+                           stop stop stop stop stop    stop stop stop stop stop
+                           stop stop stop stop
     dest_0x7f: __NO_MATCH()
     dest_0x80: __NO_MATCH()
     dest_0x81: __NO_MATCH()
@@ -476,9 +491,14 @@
     dest_0xd2: __NO_MATCH()
     dest_0xd3: __NO_MATCH()
     dest_0xd4: __NO_MATCH()
-    dest_0xd5: __NO_MATCH()
-    dest_0xd6: __NO_MATCH()
-    dest_0xd7: __NO_MATCH()
+    dest_0xd5:
+        // 0xd505accf
+        __FUNC_SIG(permit)
+        INVALID_NON_PAYABLE()
+        PERMIT(callvalue)
+        /// @dev Selectors 0xd6000000 - 0xd7ffffff will exceptionally revert.
+        /* padding (12) */ stop stop stop stop stop    stop stop stop stop stop
+                           stop stop
     dest_0xd8: __NO_MATCH()
     dest_0xd9: __NO_MATCH()
     dest_0xda: __NO_MATCH()
@@ -543,6 +563,10 @@
 
     withdrawFrom_inf_allow_bal_check:
         _WITHDRAW_FROM_INF_BAL_CHECK(callvalue, withdrawFrom_end)
+
+    // Should be unreachable but just incase.
+    invalid
+
     withdrawFrom_end:
         _WITHDRAW_FROM_END(callvalue)
 

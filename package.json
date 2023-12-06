@@ -8,6 +8,8 @@
   "private": true,
   "scripts": {
     "test-codegen": "pytest --ignore=lib",
-    "gas-report": "forge test --mp test/gas/METHGas.t.sol --ffi --gas-report"
+    "test-functionality": "forge test --nmp test/gas/METHGas.t.sol --ffi -vvv --summary",
+    "gas-report": "forge test --mp test/gas/METHGas.t.sol --ffi --gas-report",
+    "test": "yarn test-codegen && yarn test-functionality"
   }
 }

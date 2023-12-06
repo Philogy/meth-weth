@@ -102,7 +102,7 @@ def _get_func_size(name):
         'sweepLost': 2,
         'withdrawAllTo': 2,
         'depositWithOldTo': 3,
-        'permit': 4
+        'permit': 3
     }.get(name, 1)
 
 
