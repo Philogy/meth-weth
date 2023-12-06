@@ -1,0 +1,4 @@
+#define constant __UNSAFE_ZERO_SLOT = FREE_STORAGE_POINTER()
+
+/// @dev Slot for reserves of "old" WETH e.g. WETH9
+#define constant OLD_RESERVES_SLOT = 0x10000000000000000000000000000000000000000
