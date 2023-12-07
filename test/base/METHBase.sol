@@ -39,12 +39,17 @@ contract METHBase is Test {
         return x > y ? x : y;
     }
 
+    function reservesOld() internal view returns (uint256) {
+        return meth.totalSupply() - address(meth).balance;
+    }
+
     function _setNonce(address nonce, uint256 newNonce) internal {
         storer.target(address(meth)).sig(MockMETH.nonces.selector).with_key(nonce).checked_write(newNonce);
     }
 
     function _signPermit(Account memory account, address spender, uint256 amount, uint256 nonce, uint256 deadline)
         internal
+        view
         returns (uint8 v, bytes32 r, bytes32 s)
     {
         bytes32 innerHash = keccak256(abi.encode(PERMIT_TYPEHASH, account.addr, spender, amount, nonce, deadline));

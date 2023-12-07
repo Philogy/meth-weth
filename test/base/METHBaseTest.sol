@@ -281,10 +281,6 @@ abstract contract METHBaseTest is METHBase {
         assertEq(meth.nonces(owner.addr), nonce + 1);
     }
 
-    function test_debug() public {
-        meth.DOMAIN_SEPARATOR();
-    }
-
     function testWithdrawTo() public {
         address owner = makeAddr("owner");
         address recipient = makeAddr("recipient");
@@ -309,13 +305,56 @@ abstract contract METHBaseTest is METHBase {
         deal(address(weth), address(meth), amount1);
         meth.depositWithOldTo(recipient1);
         assertEq(meth.balanceOf(recipient1), amount1, "bal 1 wrong");
-        assertEq(meth.reservesOld(), amount1);
+        assertEq(reservesOld(), amount1);
 
         deal(address(weth), address(meth), amount1 + amount2);
         uint256 prevBal = meth.balanceOf(recipient2);
         meth.depositWithOldTo(recipient2);
         assertEq(meth.balanceOf(recipient2), prevBal + amount2, "bal 2 wrong");
-        assertEq(meth.reservesOld(), amount1 + amount2);
+        assertEq(reservesOld(), amount1 + amount2);
+    }
+
+    function test_debug() public {
+        test_fuzzingWithdrawAsOld(
+            115792089237316195423570985008687907853269984665640564039453902643274763828101,
+            0x0000000000000000000000000000000000000000,
+            0,
+            0,
+            0x0000000000000000000000000000000000000000
+        );
+    }
+
+    function test_fuzzingWithdrawAsOld(
+        uint256 startReserves,
+        address withdrawer,
+        uint256 minBalance,
+        uint256 amount,
+        address to
+    ) public {
+        deal(address(weth), address(meth), startReserves);
+        meth.depositWithOldTo(address(0));
+
+        minBalance = bound(minBalance, 0, type(uint256).max - startReserves);
+        dealMeth(withdrawer, minBalance);
+        uint256 startBalance = meth.balanceOf(withdrawer);
+        amount = bound(amount, 0, startBalance);
+
+        uint256 wethBalBefore = weth.balanceOf(to);
+        uint256 supplyBefore = meth.totalSupply();
+        vm.prank(withdrawer);
+        meth.withdrawAsOldTo(to, amount);
+
+        assertEq(meth.totalSupply(), supplyBefore - amount, "invalid total supply");
+        assertEq(meth.balanceOf(withdrawer), startBalance - amount, "invalid withdrawer balance");
+        if (amount > startReserves) {
+            if (to == address(meth)) assertEq(weth.balanceOf(address(meth)), amount);
+            else assertEq(weth.balanceOf(to), wethBalBefore + amount);
+            assertEq(reservesOld(), 0);
+        } else {
+            if (to == address(meth)) assertEq(weth.balanceOf(address(meth)), wethBalBefore);
+            else assertEq(weth.balanceOf(to), wethBalBefore + amount);
+            assertEq(reservesOld(), startReserves - amount);
+        }
     }
 
     function test_fuzzingWithdrawFromFiniteAllowance(

@@ -7,10 +7,10 @@
   "license": "MIT",
   "private": true,
   "scripts": {
-    "build": "forge build && python3 script/build-helpers/constant-inserter.py",
+    "build": "python3 script/build-helpers/constant-inserter.py; forge build",
     "test-codegen": "pytest --ignore=lib",
-    "test-functionality": "forge test --nmp test/gas/METHGas.t.sol --ffi -vvv --summary",
-    "gas-report": "forge test --mp test/gas/METHGas.t.sol --ffi --gas-report",
-    "test": "yarn test-codegen && yarn test-functionality"
+    "test-functionality": "yarn build; forge test --nmp test/gas/METHGas.t.sol --ffi -vvv --summary",
+    "gas-report": "yarn build; forge test --mp test/gas/METHGas.t.sol --ffi --gas-report",
+    "test": "yarn build; yarn test-codegen && yarn test-functionality"
   }
 }

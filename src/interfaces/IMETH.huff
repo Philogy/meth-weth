@@ -22,8 +22,7 @@
 #define function withdrawFromTo(address from, address to, uint256 amount) nonpayable returns ()
 #define function sweepLost() nonpayable returns ()
 #define function depositWithOldTo(address to) nonpayable returns ()
-// #define function withdrawAsOldTo(address to, uint256 amount) nonpayable returns ()
-#define function reservesOld() view returns (uint256)
+#define function withdrawAsOldTo(address to, uint256 amount) nonpayable returns ()
 
 #define function nonces(address owner) view returns (uint256)
 #define function DOMAIN_SEPARATOR() view returns (bytes32)

@@ -115,10 +115,10 @@
 /// `totalSupply()` will diverge from the circulating supply by the amount of ETH forcefully sent to
 /// the contract via self-destruct.
 #define macro TOTAL_SUPPLY(z0) = takes(0) returns(0) {
-    selfbalance               // [eth_balance]
-    [OLD_RESERVES_SLOT] sload // [eth_balance, old_reserves]
-    add                       // [total_supply]
-    _RETURN_WORD(<z0>, msize) // [] -- end
+    selfbalance                // [eth_balance]
+    _OLD_RESERVES_SLOT() sload // [eth_balance, old_reserves]
+    add                        // [total_supply]
+    _RETURN_WORD(<z0>, msize)  // [] -- end
 }
 
 #define macro BALANCE_OF(z0) = takes(0) returns(0) {

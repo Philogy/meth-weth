@@ -1,5 +1,5 @@
-/// @dev Placeholder (keccak256("meth-weth.old-weth.address")[12:32])
-#define constant OLD_WETH = 0x5d9518e067e84d23aa465f6aeb5173c9bd1a72ea
+/// @dev Placeholder (keccak256("meth.immutable.old-weth")[12:32])
+#define constant OLD_WETH = 0x239bb6b019c72afb165d3ba39abaac26ae9e4faa
 
 #define macro DEPOSIT_WITH_OLD_TO(z0) = takes(1) returns(0) {
     // takes:                       [has_error]
@@ -22,7 +22,7 @@
     no_error:
     <z0> mload                   // [bal]
     // -- Load reserves and calculate amount
-    [OLD_RESERVES_SLOT]          // [bal, reserve_slot]
+    _OLD_RESERVES_SLOT()         // [bal, reserve_slot]
     _LOAD_ADDRESS(0x10)          // [bal, reserve_slot, to]
     dup2                         // [bal, reserve_slot, to, reserve_slot]
     sload                        // [bal, reserve_slot, to, reserves]
@@ -46,23 +46,85 @@
     stop                   // [] -- end
 }
 
-#define macro WITHDRAW_AS_OLD_TO(z0) = takes(1) returns(0) {
-    // takes:                 [has_error]
-    // TODO: Implement
-    /*
-
-    */
-    jumpdest
-    jumpdest
-    0x0 0x0 revert
+#define macro WITHDRAW_AS_OLD_TO(z0, jit_wrap) = takes(1) returns(0) {
+    /**
+     * takes:                     [has_error]
+     * calldata:
+     *     0x04:0x24 - address  to
+     *     0x24:0x44 - uint256 amount
+     */
+    0x24 calldataload          // [has_error, amount]
+    caller                     // [has_error, amount, caller]
+    sload                      // [has_error, amount, caller_bal]
+    _OLD_RESERVES_SLOT()       // [has_error, amount, caller_bal, reserves_slot]
+    dup3                       // [has_error, amount, caller_bal, reserves_slot, amount]
+    dup2                       // [has_error, amount, caller_bal, reserves_slot, amount, reserves_slot]
+    sload dup1                 // [has_error, amount, caller_bal, reserves_slot, amount, reserves, reserves]
+    dup3                       // [has_error, amount, caller_bal, reserves_slot, amount, reserves, reserves, amount]
+    gt                         // [has_error, amount, caller_bal, reserves_slot, amount, reserves, amount > reserves]
+    <jit_wrap> jumpi           // [has_error, amount, caller_bal, reserves_slot, amount, reserves]
+    // Sufficient reserves, don't need to wrap more.
+    sub                        // [has_error, amount, caller_bal, reserves_slot, new_reserves]
+    swap1                      // [has_error, amount, caller_bal, new_reserves, reserves_slot]
+    sstore                     // [has_error, amount, caller_bal]
+    dup2                       // [has_error, amount, caller_bal, amount]
+    dup2                       // [has_error, amount, caller_bal, amount, caller_bal]
+    sub                        // [has_error, amount, caller_bal, new_caller_bal]
+    caller                     // [has_error, amount, caller_bal, new_caller_bal, caller]
+    sstore                     // [has_error, amount, caller_bal]
+    lt                         // [has_error, caller_bal < amount]
+    or                         // [updated_has_error]
+    _TRANSFER_OLD_WETH(<z0>)   // [] -- end
 }
 
-#define macro RESERVES_OLD(z0) = takes(0) returns(0) {
-    [OLD_RESERVES_SLOT]    // [reserves_slot]
-    sload                  // [reserves]
-    <z0>                   // [reserves, 0x00]
-    mstore                 // []
-    msize                  // [0x20]
-    <z0>                   // [0x20, 0x00]
-    return                 // [] -- end
+#define macro _JIT_WRAP(z0) = takes(6) returns(0) {
+    // takes:                     [has_error, amount, caller_bal, reserves_slot, amount, reserves]
+    // -- Convert missing WETH by wrapping some ETH.
+    dup2                       // [has_error, amount, caller_bal, reserves_slot, amount, reserves, amount]
+    sub                        // [has_error, amount, caller_bal, reserves_slot, amount, missing_amount]
+    <z0> <z0> <z0> <z0>        // [has_error, amount, caller_bal, reserves_slot, amount, missing_amount, 0, 0, 0, 0]
+    swap4                      // [has_error, amount, caller_bal, reserves_slot, amount, 0, 0, 0, 0, missing_amount]
+    [OLD_WETH]                 // [has_error, amount, caller_bal, reserves_slot, amount, 0, 0, 0, 0, missing_amount, old_weth]
+    gas call                   // [has_error, amount, caller_bal, reserves_slot, amount, suc]
+    // TODO: Check success?
+    pop                        // [has_error, amount, caller_bal, reserves_slot, amount]
+    dup3                       // [has_error, amount, caller_bal, reserves_slot, amount, caller_bal]
+    sub                        // [has_error, amount, caller_bal, reserves_slot, new_caller_bal]
+    caller                     // [has_error, amount, caller_bal, reserves_slot, new_caller_bal, caller]
+    sstore                     // [has_error, amount, caller_bal, reserves_slot]
+    <z0>                       // [has_error, amount, caller_bal, reserves_slot, 0]
+    swap1                      // [has_error, amount, caller_bal, 0, reserves_slot]
+    sstore                     // [has_error, amount, caller_bal]
+    lt                         // [has_error, caller_bal < amount]
+    or                         // [updated_has_error]
+    _TRANSFER_OLD_WETH(<z0>)   // [] -- end
+}
+
+/// @dev Expects MSIZE = 0.
+#define macro _TRANSFER_OLD_WETH(z0) = takes(1) returns(0) {
+    // takes:                     [has_error]
+    __FUNC_SIG(transfer)       // [has_error, transfer_sel]
+    msize                      // [has_error, transfer_sel, 0x00]
+    mstore                     // [has_error]
+    msize                      // [has_error, 0x20]
+    0x40 0x04                  // [has_error, 0x20, 0x40, 0x04]
+    msize                      // [has_error, 0x20, 0x40, 0x04, 0x20]
+    calldatacopy               // [has_error, 0x20]
+    <z0> 0x44 0x1c <z0>        // [has_error, 0x20, 0x00, 0x44, 0x1c, 0]
+    [OLD_WETH]                 // [has_error, 0x20, 0x00, 0x44, 0x1c, 0, old_weth]
+    gas call                   // [has_error, suc]
+    <z0> mload                 // [has_error, suc, return_val]
+    0x1                        // [has_error, suc, return_val, 1]
+    eq                         // [has_error, suc, return_val == 1]
+    returndatasize             // [has_error, suc, return_val == 1, rdz]
+    iszero                     // [has_error, suc, return_val == 1, rdz == 0]
+    or                         // [has_error, suc, return_val == 1 || rdz == 0]
+    and                        // [has_error, suc && (return_val == 1 || rdz == 0)]
+    _A_AND_NOT_B()             // [no_error]
+    _REQUIRE(0x0, global_stop) // [] -- end
+}
+
+#define macro GET_OLD_WETH(z0) = takes(0) returns(0) {
+    [OLD_WETH]                 // []
+    _RETURN_WORD(<z0>, msize)  // [] -- end
 }

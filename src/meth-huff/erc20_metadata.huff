@@ -7,7 +7,7 @@
 }
 
 // symbol.length ++ "METH"
-#define constant DEFAULT_PACKED_SYMBOL = 0x044d455448000000000000000000000000000000000000000000000000000000
+#define constant PACKED_SYMBOL = 0x044d455448
 
 #define macro NAME(z0) = takes(0) returns(0) {
     __tablesize(DEFAULT_NAME_DATA)  // [name_data.size]
@@ -20,14 +20,14 @@
 }
 
 #define macro SYMBOL(z0) = takes(0) returns(0) {
-    0x20                     // [32]
-    <z0>                     // [32, 0]
+    0x20                     // [0x20]
+    <z0>                     // [0x20, 0x00]
     mstore                   // []
-    [DEFAULT_PACKED_SYMBOL]  // [packed_symbol]
-    0x3f                     // [packed_symbol, 63]
+    [PACKED_SYMBOL]          // [packed_symbol]
+    0x24                     // [packed_symbol, 0x24]
     mstore                   // []
-    msize                    // [ret_size]
-    <z0>                     // [ret_size, 0]
+    msize                    // [0x60]
+    <z0>                     // [0x60, 0x00]
     return                   // [] -- end
 }
 

@@ -54,6 +54,12 @@ contract METHGasTest is METHInjected {
         meth.balanceOf(user);
     }
 
+    function test_nonces() public {
+        address user = makeAddr("user");
+        _setNonce(user, 1);
+        meth.nonces(user);
+    }
+
     function test_allowance() public {
         address from = makeAddr("from");
         address to = makeAddr("to");
