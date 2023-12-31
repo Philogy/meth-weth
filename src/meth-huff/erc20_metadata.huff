@@ -6,8 +6,8 @@
   0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000214d6178696d616c6c7920456666696369656e74205772617070656420457468657200000000000000000000000000000000000000000000000000000000000000
 }
 
-// symbol.length ++ "METH"
-#define constant PACKED_SYMBOL = 0x044d455448
+// symbol.length ++ "µETH" (unicode)
+#define constant PACKED_SYMBOL = 0x05c2b5455448
 
 #define macro NAME(z0) = takes(0) returns(0) {
     __tablesize(DEFAULT_NAME_DATA)  // [name_data.size]
@@ -24,7 +24,7 @@
     <z0>                     // [0x20, 0x00]
     mstore                   // []
     [PACKED_SYMBOL]          // [packed_symbol]
-    0x24                     // [packed_symbol, 0x24]
+    0x25                     // [packed_symbol, 0x25]
     mstore                   // []
     msize                    // [0x60]
     <z0>                     // [0x60, 0x00]

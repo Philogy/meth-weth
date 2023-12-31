@@ -10,7 +10,7 @@ contract ReferenceMETH is IMETH {
     address internal immutable recovery;
     IWETH9 internal immutable WETH9;
 
-    string public constant symbol = "METH";
+    string public constant symbol = unicode"µETH";
     string public constant name = "Maximally Efficient Wrapped Ether";
     uint8 public constant decimals = 18;
 

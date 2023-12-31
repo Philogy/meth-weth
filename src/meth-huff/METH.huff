@@ -398,10 +398,10 @@
         __FUNC_SIG(symbol)
         __NON_PAYABLE_SELECTOR_CHECK()
         SYMBOL(callvalue)
-        /* padding (36) */ stop stop stop stop stop    stop stop stop stop stop
+        /* padding (35) */ stop stop stop stop stop    stop stop stop stop stop
                            stop stop stop stop stop    stop stop stop stop stop
                            stop stop stop stop stop    stop stop stop stop stop
-                           stop stop stop stop stop    stop
+                           stop stop stop stop stop
     dest_0x96: __NO_MATCH()
     dest_0x97: __NO_MATCH()
     dest_0x98: __NO_MATCH()

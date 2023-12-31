@@ -14,7 +14,7 @@ abstract contract METHBaseTest is METHBase {
         (bool success, bytes memory ret) = address(meth).staticcall(symbolCall);
         assertTrue(success);
         string memory symbol = abi.decode(ret, (string));
-        assertEq(symbol, "METH");
+        assertEq(symbol, unicode"µETH");
     }
 
     function testName() public {
