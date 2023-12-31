@@ -8,24 +8,24 @@ import {MIN_INF_ALLOWANCE} from "../METHConstants.sol";
 /// @author philogy <https://github.com/philogy>
 contract ReferenceMETH is IMETH {
     address internal immutable recovery;
-    IWETH9 internal immutable WETH9;
+    address internal immutable OLD_WETH;
 
     string public constant symbol = unicode"µETH";
     string public constant name = "Maximally Efficient Wrapped Ether";
     uint8 public constant decimals = 18;
 
-    bytes32 internal immutable CACHED_DOMAIN_SEPARATOR;
+    bytes32 public immutable DOMAIN_SEPARATOR;
 
-    uint256 public reservesOld;
+    uint256 internal reservesOld;
     mapping(address => mapping(address => uint256)) public allowance;
     mapping(address => uint256) public balanceOf;
     mapping(address => uint256) public nonces;
 
-    constructor(address recovery_, address weth9) {
+    constructor(address recovery_, address oldWeth) {
         require(recovery_ != address(0) && recovery_ != address(this));
         recovery = recovery_;
-        WETH9 = IWETH9(weth9);
-        CACHED_DOMAIN_SEPARATOR = keccak256(
+        OLD_WETH = oldWeth;
+        DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256(bytes(name)),
@@ -111,7 +111,7 @@ contract ReferenceMETH is IMETH {
     }
 
     function depositWithOldTo(address to) external {
-        uint256 oldWethBal = WETH9.balanceOf(address(this));
+        uint256 oldWethBal = IWETH9(OLD_WETH).balanceOf(address(this));
         uint256 deposited;
         unchecked {
             deposited = oldWethBal - reservesOld;
@@ -126,10 +126,10 @@ contract ReferenceMETH is IMETH {
         uint256 preReserves = reservesOld;
         unchecked {
             if (amount > preReserves) {
-                // If not enough WETH9 already held as reserves convert some ETH -> WETH9 backing.
+                // If not enough WETH already held as reserves convert some ETH -> WETH backing.
                 // Not checking or using un-deposited WETH for the sake of simplicity and because it
                 // wouldn't really be "withdrawing" then.
-                (bool success,) = address(WETH9).call{value: amount - preReserves}("");
+                (bool success,) = OLD_WETH.call{value: amount - preReserves}("");
                 require(success);
                 reservesOld = 0;
             } else {
@@ -137,7 +137,7 @@ contract ReferenceMETH is IMETH {
             }
             balanceOf[msg.sender] = preBal - amount;
         }
-        WETH9.transfer(to, amount);
+        IWETH9(OLD_WETH).transfer(to, amount);
     }
 
     function permit(address owner, address spender, uint256 amount, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
@@ -146,7 +146,7 @@ contract ReferenceMETH is IMETH {
         bytes32 permitMessageHash = keccak256(
             abi.encodePacked(
                 bytes2(hex"1901"),
-                DOMAIN_SEPARATOR(),
+                DOMAIN_SEPARATOR,
                 keccak256(
                     abi.encode(
                         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"),
@@ -168,10 +168,6 @@ contract ReferenceMETH is IMETH {
         unchecked {
             return address(this).balance + reservesOld;
         }
-    }
-
-    function DOMAIN_SEPARATOR() public view returns (bytes32) {
-        return CACHED_DOMAIN_SEPARATOR;
     }
 
     function _transfer(address from, address to, uint256 amount) internal {
